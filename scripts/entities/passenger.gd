@@ -89,7 +89,7 @@ func _update_visual() -> void:
 		return
 
 	var active: bool = can_be_selected()
-	var base_color: Color = _color_to_rgb(color)
+	var base_color: Color = PassengerColor.to_rgb(color)
 	var display_color: Color = base_color if active else base_color.lerp(Color(0.55, 0.55, 0.55), 0.7)
 
 	var style: StyleBoxFlat = StyleBoxFlat.new()
@@ -98,19 +98,3 @@ func _update_visual() -> void:
 	_visual.add_theme_stylebox_override("panel", style)
 
 	_input_button.disabled = not active
-
-
-func _color_to_rgb(value: int) -> Color:
-	match value:
-		PassengerColor.Value.RED:
-			return Color(0.86, 0.20, 0.20)
-		PassengerColor.Value.BLUE:
-			return Color(0.20, 0.45, 0.86)
-		PassengerColor.Value.YELLOW:
-			return Color(0.93, 0.78, 0.20)
-		PassengerColor.Value.GREEN:
-			return Color(0.25, 0.75, 0.35)
-		PassengerColor.Value.PURPLE:
-			return Color(0.60, 0.30, 0.80)
-		_:
-			return Color(0.5, 0.5, 0.5)

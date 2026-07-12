@@ -5,23 +5,26 @@ single GDScript codebase shared by Android and iOS.
 
 ## Status
 
-Milestone 5: PassengerQueue scene, on top of Milestone 4's reusable
-Passenger scene, Milestone 3's typed data models, and Milestone 2's app
-navigation shell. MainMenu (Play / Levels / Settings) navigates to
-LevelSelect and Settings placeholder screens through `AppRouter`, with
-centralized back navigation (in-app Back button and the Android hardware
-back button both funnel through the same code path). `SaveManager`,
-`SettingsManager` and `AudioManager` exist as service foundations.
-`PassengerColor`/`PassengerData`/`BusData`/`PassengerQueueData`/
-`WaitingAreaData`/`LevelData`/`GameState`/`GameStateSnapshot` exist as the
-pure-data layer for gameplay. `scenes/entities/passenger.tscn` is a
-colored, selectable passenger token with no external art.
-`scenes/game/passenger_queue.tscn` stacks Passengers vertically, keeps only
-the front one selectable, advances automatically when it's removed, and
-emits `queue_emptied` once the last one is gone (see
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)). No Bus/Game scene, waiting
-area, or real gameplay flow exist yet -- PassengerQueue isn't wired into
-anything.
+Milestone 6: Bus and BusQueue scenes, on top of Milestone 5's PassengerQueue,
+Milestone 4's reusable Passenger scene, Milestone 3's typed data models, and
+Milestone 2's app navigation shell. MainMenu (Play / Levels / Settings)
+navigates to LevelSelect and Settings placeholder screens through
+`AppRouter`, with centralized back navigation (in-app Back button and the
+Android hardware back button both funnel through the same code path).
+`SaveManager`, `SettingsManager` and `AudioManager` exist as service
+foundations. `PassengerColor`/`PassengerData`/`BusData`/
+`PassengerQueueData`/`WaitingAreaData`/`LevelData`/`GameState`/
+`GameStateSnapshot` exist as the pure-data layer for gameplay.
+`scenes/entities/passenger.tscn` is a colored, selectable passenger token;
+`scenes/game/passenger_queue.tscn` stacks them vertically, keeping only the
+front selectable and advancing automatically as they're removed.
+`scenes/entities/bus.tscn` is a colored bus with a capacity, a fill
+indicator, and same-color boarding logic; `scenes/game/bus_queue.tscn` runs
+buses in sequence, only the first ever active, advancing (and eventually
+completing) automatically as each bus fills up (see
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)). No WaitingArea or Game scene,
+and no real gameplay flow, exist yet -- Passenger/PassengerQueue and
+Bus/BusQueue aren't wired to each other.
 
 ## Tech stack
 
@@ -52,15 +55,16 @@ data/levels/        JSON level definitions
 docs/                architecture and process docs
 exports/             local export output (git-ignored)
 scenes/app/          root/app-shell scenes
-scenes/entities/     passenger.tscn, passenger_test.tscn (bus scenes later)
-scenes/game/         passenger_queue.tscn, passenger_queue_test.tscn
+scenes/entities/     passenger.tscn, bus.tscn (+ passenger_test.tscn)
+scenes/game/         passenger_queue.tscn, bus_queue.tscn
+                     (+ passenger_queue_test.tscn)
 scenes/menus/        menu scenes
 scenes/ui/           reusable UI components
 scripts/core/        AppRouter, AudioManager, other cross-cutting services
 scripts/data/        SaveManager, SettingsManager, PassengerColor, LevelData
-scripts/entities/    PassengerData, BusData (data) + Passenger (scene view)
+scripts/entities/    PassengerData, BusData (data) + Passenger, Bus (views)
 scripts/game/        PassengerQueueData, WaitingAreaData, GameState(Snapshot),
-                     PassengerQueue (scene view)
+                     PassengerQueue, BusQueue (scene views)
 scripts/platform/    PlatformService and platform-specific code
 scripts/ui/          UI scripts (MainMenu, app shell)
 tests/               dependency-free GDScript test runner
@@ -105,6 +109,12 @@ This runs, in order:
     removing it advances the queue, the last removal emits `queue_emptied`,
     and a queue can't be double-removed or selected mid-animation
     (`tests/verify_passenger_queue.gd`)
+12. Bus checks -- wrong color rejected, correct color accepted, capacity
+    never exceeded, and completion fires exactly once when full
+    (`tests/verify_bus.gd`)
+13. BusQueue checks -- only the first bus is active, filling it advances to
+    the next (`active_bus_changed`), and completing the last bus completes
+    the queue (`bus_queue_completed`) (`tests/verify_bus_queue.gd`)
 
 Exits 0 only if every step above passes except the informational unused-
 script report. See `tools/validation/` for the individual checks and

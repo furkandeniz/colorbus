@@ -283,6 +283,71 @@ PassengerQueue (VBoxContainer, script=passenger_queue.gd)
   child's own `passenger_selected` fired (connected per-passenger in
   `configure()`); the queue doesn't filter it beyond what `Passenger`
   itself already gates via `can_be_selected()`.
+- `PassengerColor.to_rgb(value)` was added here to give `Passenger` and
+  `Bus` (below) the exact same color mapping from one place — it was a
+  private `_color_to_rgb()` duplicated in `passenger.gd` until `Bus`
+  needed the identical mapping; now both call the shared one.
+
+## Bus and BusQueue scenes (Milestone 6)
+
+`scenes/entities/bus.tscn` / `scripts/entities/bus.gd` and
+`scenes/game/bus_queue.tscn` / `scripts/game/bus_queue.gd` mirror
+Passenger/PassengerQueue's split (single entity view + composite queue
+view), but a `Bus` has no click/tap surface of its own — boarding is
+driven programmatically, since passengers are what get tapped, not buses.
+"Business logic and visual layer separated" here means `configure()` /
+`board_passenger()` / `set_active()` only ever mutate data and call
+`_update_visual()` — no view code makes a boarding decision, and no
+gameplay code touches a StyleBox.
+
+```
+Bus (Control, script=bus.gd)
+├─ Visual (Panel)          -- body color, muted when inactive/completed
+├─ CountLabel (Label)      -- "current/capacity" text
+└─ FillBar (ProgressBar)   -- fill indicator, same color as Visual
+```
+
+- **`configure(color, capacity)`** always starts a fresh bus (0 passengers,
+  not completed) — a `Bus` is configured once per bus, never "topped up".
+- **`can_accept(color)`** is the single same-color check: active, not
+  completed, has room, and the color actually matches. `board_passenger()`
+  calls it first and does nothing (returns `false`) if it fails — a wrong
+  color, a full bus, an inactive bus, and an already-completed bus are all
+  rejected the exact same way, by the exact same gate.
+- **The fill indicator** (`FillBar`, a `ProgressBar` with `show_percentage
+  = false`) and `CountLabel` are driven by `current_passengers`/`capacity`
+  in `_update_visual()`, colored via `PassengerColor.to_rgb()` like
+  everything else — no textures, same technique as `Passenger`.
+- **`bus_completed`** fires exactly once, the instant `current_passengers`
+  reaches `capacity` inside `board_passenger()` — never again afterward,
+  since `can_accept()` already blocks a completed bus from boarding anyone
+  else.
+
+```
+BusQueue (HBoxContainer, script=bus_queue.gd)
+├─ Bus  (active_index -- active)
+├─ Bus  (not active)
+└─ Bus  (not active)
+```
+
+- **Buses are never removed on completion** (unlike PassengerQueue's
+  passengers, which physically leave) — a completed `Bus` stays visible,
+  marked completed, and `BusQueue` just advances `_active_index` to the
+  next one. This matches the literal requirement ("mark it completed, the
+  next one becomes active"), not a removal.
+- **`configure(bus_data_list: Array[BusData])`** takes external `BusData`
+  the same way `PassengerQueue.configure()` takes raw colors — the queue
+  view stays decoupled from anything that decides what buses exist (a
+  future `GameController`/`LevelData` bridges the two).
+- `_on_bus_completed(bus)` guards `if bus != active_bus(): return` — only
+  the currently active bus completing can ever advance the queue, so a
+  stale signal from a bus that isn't active (shouldn't normally happen,
+  since inactive buses reject boarding via `can_accept()`) can't
+  double-advance it.
+- **`active_bus_changed`** fires both on the initial `configure()` (index 0
+  becoming active) and every time `_active_index` advances.
+  **`bus_queue_completed`** fires once `_active_index` moves past the last
+  bus — i.e. every bus has completed in sequence.
 
 ## Audio
 
@@ -334,3 +399,15 @@ volume is wired to the engine's built-in "Master" bus and reacts live to
   surfaced a real GDScript gotcha, not a PassengerQueue bug — see
   [CLAUDE.md](../CLAUDE.md)'s "GDScript lambda closures capture by value"
   section.
+- Bus is verified by `tests/verify_bus.gd`: a wrong color is rejected, a
+  correct color is accepted, capacity is never exceeded, `bus_completed`
+  fires exactly once when full (not again on further attempts), and an
+  inactive bus rejects boarding outright. No manual test scene this time —
+  a `Bus` has no click surface, so there's nothing a human would click
+  through that the automated test doesn't already exercise directly.
+- BusQueue is verified by `tests/verify_bus_queue.gd`: only the first bus
+  is active after `configure()`, filling the active bus advances
+  `active_bus()` to the next one and fires `active_bus_changed`,
+  completing every bus in sequence fires `bus_queue_completed`, completed
+  buses stay in the queue rather than being removed, and a stale
+  `bus_completed` from a non-active bus doesn't advance anything.

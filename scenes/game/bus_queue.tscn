@@ -1,0 +1,7 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/game/bus_queue.gd" id="1_pma8o"]
+
+[node name="BusQueue" type="HBoxContainer" unique_id=2092228526]
+theme_override_constants/separation = 16
+script = ExtResource("1_pma8o")
