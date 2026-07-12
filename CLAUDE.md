@@ -30,17 +30,23 @@ design.
 Run after every change, before committing:
 
 ```bash
-godot --headless --path . --import
-godot --headless --check-only -s <changed_script.gd>
-godot --headless --path . --quit-after 60
+./tools/validate.sh
 ```
 
-`--check-only -s` compiles a script in isolation, without the project's
-Autoloads registered — a script that references `PlatformService` (or any
-other Autoload) will report a false `Identifier not found` error under
-`--check-only` even though it runs fine as part of the actual project. Only
-trust `--check-only` for scripts with no Autoload references; otherwise
-rely on the actual `--quit-after` run instead.
+This runs the headless import, a GDScript parse check (with Autoloads
+registered, unlike `--check-only -s` below), a JSON syntax check, a broken
+`res://` reference check, an unused-script report, and a headless main-scene
+boot check — see [tools/validation/](tools/validation/) and the README's
+"Validating" section. It's also wired up as the VS Code task
+**Color Bus: Validate Project**.
+
+`godot --headless --check-only -s <script.gd>` compiles a script in
+isolation, without the project's Autoloads registered — a script that
+references `PlatformService` (or any other Autoload) will report a false
+`Identifier not found` error under `--check-only` even though it runs fine
+as part of the actual project (and as part of `tools/validate.sh`, which
+loads scripts through the real project context). Only trust bare
+`--check-only` for scripts with no Autoload references.
 
 Responsive layout across phone sizes is verified by
 `tests/verify_responsive_layout.gd` (see

@@ -46,6 +46,7 @@ scripts/game/        puzzle/game logic
 scripts/platform/    PlatformService and platform-specific code
 scripts/ui/          UI scripts
 tests/               dependency-free GDScript test runner
+tools/validation/    automated project validation checks
 ```
 
 ## Running
@@ -54,6 +55,29 @@ tests/               dependency-free GDScript test runner
 godot --path . --editor          # open in the editor
 godot --headless --path . --import   # (re)import assets after pulling changes
 ```
+
+## Validating
+
+Run every automated check with one command:
+
+```bash
+./tools/validate.sh
+```
+
+or from VS Code: **Terminal > Run Task... > Color Bus: Validate Project**
+(also bound as the default build/test task).
+
+This runs, in order:
+
+1. Headless project import
+2. GDScript parse check for every script under `scripts/`, `tools/`, `tests/`
+3. JSON syntax check for every file under `data/`
+4. Broken `res://` reference check across all `.tscn`/`.tres`/`.gd` files
+5. Unused-script report for `scripts/` (informational, doesn't fail the run)
+6. Headless boot check of the main scene
+
+Exits 0 only if steps 1-4 and 6 all pass. See `tools/validation/` for the
+individual checks and [CLAUDE.md](CLAUDE.md) for when to run this.
 
 ## Development rules
 
