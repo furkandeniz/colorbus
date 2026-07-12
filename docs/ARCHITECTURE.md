@@ -136,8 +136,7 @@ reserved for future gameplay controls/bottom navigation.
 Pure data, no visual/Node reference anywhere, all `RefCounted` (chosen over
 `Resource`: these are loaded from JSON and mutated freely during play, and
 `Resource`'s default by-path caching/sharing semantics are the wrong fit for
-mutable runtime game state — `RefCounted` has no such surprises). No
-Passenger/Bus/Game *scene* exists yet; these are the data layer only.
+mutable runtime game state — `RefCounted` has no such surprises).
 
 ```
 PassengerColor          -- enum Value {RED, BLUE, YELLOW, GREEN, PURPLE}
@@ -188,6 +187,54 @@ GameStateSnapshot       -- GameState frozen into a plain Dictionary
   model simply fails `is_valid()`. Nothing is ever silently coerced into a
   guessed-correct value.
 
+## Passenger scene (Milestone 4)
+
+`scenes/entities/passenger.tscn` / `scripts/entities/passenger.gd` is the
+first actual game-entity scene (everything before this was pure data). No
+external visual assets: appearance is one rounded `Panel` colored via a
+`StyleBoxFlat` built at runtime from `PassengerColor`.
+
+```
+Passenger (Control, script=passenger.gd)
+├─ Visual (Panel)        -- appearance only, mouse_filter=IGNORE
+└─ InputButton (Button)  -- flat, fully transparent stylebox overrides,
+                            input only
+```
+
+- **Input is a Button, appearance is a Panel** — deliberately split so the
+  Button (input) can be completely invisible while the Panel (visual)
+  never has to deal with click/press state. This reuses the same
+  single-fire-per-tap guarantee as every other button in the project (see
+  the Input section above) instead of hand-rolling a second, riskier
+  click-detection path for this one scene.
+- **Three independent states**, each with its own setter, all funneling
+  into `_update_visual()`: `selectable` (`set_selectable()`), `disabled`
+  (`set_disabled()`, backed by `_disabled_override`), `is_moving`
+  (`set_moving()`, set automatically by `move_to()`). `can_be_selected()`
+  is `selectable and not disabled and not is_moving and` a valid
+  `PassengerColor`. A passenger that can't currently be selected *for any
+  reason* renders muted (`Color.lerp` toward gray) rather than only
+  visually reacting to one specific flag — "not selectable right now"
+  should always look the same regardless of which state caused it.
+- **`configure(color)`** is the one entry point for setting the color from
+  outside; it only touches the `color` field, then calls
+  `_update_visual()` — data mutation and visual redraw are always two
+  separate method calls, never inlined together, per
+  [CLAUDE.md](../CLAUDE.md).
+- `_update_visual()` guards with `if not is_node_ready(): return` —
+  `configure()`/the setters can legitimately be called right after
+  `instantiate()` + `add_child()`, before `_ready()` has run and the
+  `@onready var _visual`/`_input_button` are resolved. `_ready()` calls
+  `_update_visual()` itself once the node is actually ready, so nothing is
+  lost — this just avoids a null-reference crash on the common
+  "instance, add to tree, configure immediately" call pattern.
+- **`move_to(target_position, duration)`** is the foundation for board
+  movement: creates a `Tween`, animates `position`, sets `is_moving` true
+  for the duration. Nothing calls it yet — no waiting-area/bus scene exists
+  to decide *when* or *where* a passenger should move.
+- `passenger_selected(passenger)` fires from `_on_pressed()` (connected to
+  the InputButton's `pressed`) only when `can_be_selected()` is true.
+
 ## Audio
 
 `AudioManager` (`scripts/core/audio_manager.gd`) is a plumbing-only
@@ -219,3 +266,12 @@ volume is wired to the engine's built-in "Master" bus and reacts live to
   valid/invalid construction and round-tripping for all 8 models, plus a
   recursive check that `GameStateSnapshot.data` genuinely contains no
   `Object` (no stray model/Node reference hiding in the "pure data").
+- The Passenger scene is verified by `tests/verify_passenger.gd`: all 5
+  colors, the selectable/disabled/moving gates (and that each one blocks
+  `passenger_selected`), and the `move_to()` Tween foundation actually
+  reaching its target and clearing `is_moving`. Since real click/tap
+  simulation isn't possible headlessly, "pressing" is simulated by calling
+  the private `_on_pressed()` directly — same approach and same limitation
+  as the navigation test above. A separate, non-automated
+  `scenes/entities/passenger_test.tscn` exists for a human to actually
+  click through in the editor.

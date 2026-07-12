@@ -1,0 +1,54 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/entities/passenger_test_screen.gd" id="1_hyysb"]
+
+[node name="PassengerTestScreen" type="Control" unique_id=989200135]
+layout_mode = 3
+anchors_preset = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
+script = ExtResource("1_hyysb")
+
+[node name="VBox" type="VBoxContainer" parent="." unique_id=2040738251]
+layout_mode = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme_override_constants/separation = 32
+alignment = 1
+
+[node name="PassengerRow" type="HBoxContainer" parent="VBox" unique_id=1672801011]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_constants/separation = 24
+alignment = 1
+
+[node name="StatusLabel" type="Label" parent="VBox" unique_id=1088558579]
+unique_name_in_owner = true
+layout_mode = 2
+text = "status.no_selection"
+horizontal_alignment = 1
+
+[node name="ControlsRow" type="HBoxContainer" parent="VBox" unique_id=629276863]
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_constants/separation = 16
+alignment = 1
+
+[node name="ToggleSelectableButton" type="Button" parent="VBox/ControlsRow" unique_id=2128720190]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 100)
+layout_mode = 2
+text = "controls.toggle_selectable"
+
+[node name="ToggleDisabledButton" type="Button" parent="VBox/ControlsRow" unique_id=1850059481]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 100)
+layout_mode = 2
+text = "controls.toggle_disabled"
+
+[node name="MoveDemoButton" type="Button" parent="VBox/ControlsRow" unique_id=164446661]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 100)
+layout_mode = 2
+text = "controls.move_demo"

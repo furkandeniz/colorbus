@@ -1,0 +1,31 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/entities/passenger.gd" id="1_8qxy2"]
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_3u20p"]
+
+[node name="Passenger" type="Control" unique_id=1990126005]
+custom_minimum_size = Vector2(140, 140)
+layout_mode = 3
+anchors_preset = 0
+script = ExtResource("1_8qxy2")
+
+[node name="Visual" type="Panel" parent="." unique_id=2106982153]
+unique_name_in_owner = true
+layout_mode = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+
+[node name="InputButton" type="Button" parent="." unique_id=1944747866]
+unique_name_in_owner = true
+layout_mode = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
+focus_mode = 0
+theme_override_styles/normal = SubResource("StyleBoxEmpty_3u20p")
+theme_override_styles/pressed = SubResource("StyleBoxEmpty_3u20p")
+theme_override_styles/hover = SubResource("StyleBoxEmpty_3u20p")
+theme_override_styles/disabled = SubResource("StyleBoxEmpty_3u20p")
+theme_override_styles/focus = SubResource("StyleBoxEmpty_3u20p")
+flat = true
