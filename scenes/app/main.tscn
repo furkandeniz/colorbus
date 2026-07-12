@@ -28,11 +28,24 @@ custom_minimum_size = Vector2(0, 160)
 layout_mode = 2
 color = Color(0.16, 0.2, 0.32, 1)
 
-[node name="HeaderLabel" type="Label" parent="SafeArea/RootVBox/Header" unique_id=343351237]
+[node name="HeaderBar" type="HBoxContainer" parent="SafeArea/RootVBox/Header"]
 layout_mode = 0
 anchor_right = 1.0
 anchor_bottom = 1.0
-text = "Color Bus"
+theme_override_constants/separation = 16
+
+[node name="BackButton" type="Button" parent="SafeArea/RootVBox/Header/HeaderBar"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(140, 0)
+layout_mode = 2
+visible = false
+text = "nav.back"
+
+[node name="ScreenTitleLabel" type="Label" parent="SafeArea/RootVBox/Header/HeaderBar"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = ""
 horizontal_alignment = 1
 vertical_alignment = 1
 
@@ -41,25 +54,14 @@ unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="DebugLabel" type="Label" parent="SafeArea/RootVBox/ContentArea" unique_id=1354878269]
+[node name="ScreenRoot" type="Control" parent="SafeArea/RootVBox/ContentArea"]
 unique_name_in_owner = true
 layout_mode = 0
 anchor_right = 1.0
 anchor_bottom = 1.0
-text = "0 x 0"
-horizontal_alignment = 1
-vertical_alignment = 1
 
 [node name="Footer" type="ColorRect" parent="SafeArea/RootVBox" unique_id=486138519]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 220)
 layout_mode = 2
 color = Color(0.14, 0.16, 0.2, 1)
-
-[node name="FooterLabel" type="Label" parent="SafeArea/RootVBox/Footer" unique_id=1123303341]
-layout_mode = 0
-anchor_right = 1.0
-anchor_bottom = 1.0
-text = "Controls"
-horizontal_alignment = 1
-vertical_alignment = 1

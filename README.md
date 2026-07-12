@@ -5,9 +5,12 @@ single GDScript codebase shared by Android and iOS.
 
 ## Status
 
-Milestone 1: responsive mobile app shell only (Header / ContentArea / Footer
-with safe-area support and a debug viewport-size label). No game mechanics
-yet.
+Milestone 2: app navigation shell and global service foundations. MainMenu
+(Play / Levels / Settings) navigates to LevelSelect and Settings placeholder
+screens through `AppRouter`, with centralized back navigation (in-app Back
+button and the Android hardware back button both funnel through the same
+code path). `SaveManager`, `SettingsManager` and `AudioManager` exist as
+foundations for later milestones. No game mechanics yet.
 
 ## Tech stack
 
@@ -17,6 +20,9 @@ yet.
   `expand` aspect (see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for why)
 - One codebase for Android and iOS; platform differences are isolated behind
   `PlatformService` (`scripts/platform/platform_service.gd`)
+- Mouse/touch input emulation is disabled both ways (see
+  [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)) so a single tap or click
+  never fires a button's `pressed` signal twice
 
 ## Requirements
 
@@ -39,12 +45,12 @@ scenes/entities/     passenger/bus scene prefabs
 scenes/game/         gameplay scenes
 scenes/menus/        menu scenes
 scenes/ui/           reusable UI components
-scripts/core/        cross-cutting utilities
-scripts/data/        JSON loading/validation
+scripts/core/        AppRouter, AudioManager, other cross-cutting services
+scripts/data/        SaveManager, SettingsManager, JSON loading/validation
 scripts/entities/    passenger/bus logic
 scripts/game/        puzzle/game logic
 scripts/platform/    PlatformService and platform-specific code
-scripts/ui/          UI scripts
+scripts/ui/          UI scripts (MainMenu, app shell)
 tests/               dependency-free GDScript test runner
 tools/validation/    automated project validation checks
 ```
@@ -75,9 +81,14 @@ This runs, in order:
 4. Broken `res://` reference check across all `.tscn`/`.tres`/`.gd` files
 5. Unused-script report for `scripts/` (informational, doesn't fail the run)
 6. Headless boot check of the main scene
+7. Responsive layout check across 5 phone resolutions
+   (`tests/verify_responsive_layout.gd`)
+8. App navigation check -- MainMenu -> LevelSelect -> back -> Settings ->
+   Android back button -> back-at-root (`tests/verify_navigation.gd`)
 
-Exits 0 only if steps 1-4 and 6 all pass. See `tools/validation/` for the
-individual checks and [CLAUDE.md](CLAUDE.md) for when to run this.
+Exits 0 only if every step above passes except the informational unused-
+script report. See `tools/validation/` for the individual checks and
+[CLAUDE.md](CLAUDE.md) for when to run this.
 
 ## Development rules
 

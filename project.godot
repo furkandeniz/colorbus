@@ -16,6 +16,10 @@ boot_splash/bg_color=Color(0.09, 0.09, 0.11, 1)
 [autoload]
 
 PlatformService="*res://scripts/platform/platform_service.gd"
+SaveManager="*res://scripts/data/save_manager.gd"
+SettingsManager="*res://scripts/data/settings_manager.gd"
+AudioManager="*res://scripts/core/audio_manager.gd"
+AppRouter="*res://scripts/core/app_router.gd"
 
 [display]
 
@@ -26,10 +30,17 @@ window/stretch/aspect="expand"
 window/handheld/orientation="portrait"
 window/energy_saving/keep_screen_on=true
 
+; Both emulation directions are intentionally OFF. Godot 4's Control/
+; BaseButton system natively handles both InputEventMouseButton and
+; InputEventScreenTouch without emulation. With both flags on, a single
+; physical tap/click generates a real event *and* a synthesized companion
+; event, and BaseButton reacts to both -- causing `pressed` to fire twice.
+; Leaving both off means exactly one real event per interaction, mouse and
+; touch handled identically, no double-firing.
 [input_devices]
 
-pointing/emulate_touch_from_mouse=true
-pointing/emulate_mouse_from_touch=true
+pointing/emulate_touch_from_mouse=false
+pointing/emulate_mouse_from_touch=false
 
 [rendering]
 

@@ -1,0 +1,26 @@
+[gd_scene format=3]
+
+[node name="SettingsPanel" type="Control" unique_id=593822618]
+layout_mode = 3
+anchors_preset = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
+
+[node name="VBox" type="VBoxContainer" parent="." unique_id=601173927]
+layout_mode = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme_override_constants/separation = 24
+alignment = 1
+
+[node name="TitleLabel" type="Label" parent="VBox" unique_id=307324390]
+layout_mode = 2
+theme_override_font_sizes/font_size = 48
+text = "screen.settings.title"
+horizontal_alignment = 1
+
+[node name="BodyLabel" type="Label" parent="VBox" unique_id=2018995195]
+layout_mode = 2
+text = "screen.settings.body"
+horizontal_alignment = 1
+autowrap_mode = 2

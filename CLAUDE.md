@@ -53,13 +53,40 @@ Responsive layout across phone sizes is verified by
 [docs/RESPONSIVE_TEST_PLAN.md](docs/RESPONSIVE_TEST_PLAN.md)) — the
 headless `DisplayServer` on this engine build ignores `--resolution` and
 `--window-size`, so that script uses a `SubViewport` per target size
-instead of trying to resize the real window.
+instead of trying to resize the real window. App navigation (MainMenu /
+LevelSelect / Settings / back handling) is verified the same way by
+`tests/verify_navigation.gd`. Both are run automatically by
+`tools/validate.sh`.
+
+A related gotcha for any *new* standalone `--script` entry point (not one
+`load()`ed from inside another script's `_initialize()`): the entry
+script's own top-level code is compiled before Autoloads exist as global
+identifiers, so referencing `AppRouter`/`PlatformService`/etc. by their bare
+name there fails the same way `--check-only -s` does. Work around it with
+`get_node("/root/AutoloadName")` (see the top of
+`tests/verify_navigation.gd`) instead of the bare name; scripts loaded
+*during* `_initialize()` (like `main_screen.gd`, loaded as part of
+instancing `main.tscn`) don't have this restriction.
 
 ## Autoloads
 
-Only real global services are Autoload (currently: `PlatformService`).
-`GameController` and any future per-run game state must NOT be Autoload —
-they belong to the game scene's own tree so they can be reset between runs.
+Only real global services are Autoload: `PlatformService`, `SaveManager`,
+`SettingsManager`, `AudioManager`, `AppRouter`. `GameController` and any
+future per-run game state must NOT be Autoload — they belong to the game
+scene's own tree so they can be reset between runs.
+
+## Input handling
+
+`input_devices/pointing/emulate_touch_from_mouse` and
+`emulate_mouse_from_touch` are both **off** in project.godot. Godot 4's
+`BaseButton`/`Control` natively handle both `InputEventMouseButton` and
+`InputEventScreenTouch` without emulation; with both flags on, a single tap
+or click generates a real event *and* a synthesized companion event, and a
+`Button` reacts to both, firing `pressed` twice. Don't turn these back on
+without re-verifying `pressed` still fires exactly once per interaction on
+both mouse and touch — this project's headless environment can't simulate
+GUI pointer input to re-check it automatically (see the note in
+`tests/verify_navigation.gd`), so this needs an actual device/editor check.
 
 ## Class naming gotcha
 

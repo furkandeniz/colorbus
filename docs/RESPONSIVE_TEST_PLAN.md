@@ -21,8 +21,7 @@ At every resolution above, `scenes/app/main.tscn` must satisfy all of:
    `viewport.width`).
 3. No rect has a negative width or height (would indicate a broken
    container/anchor setup).
-4. `DebugLabel` text matches the actual viewport size being tested.
-5. No GDScript errors/warnings are printed during boot at any resolution.
+4. No GDScript errors/warnings are printed during boot at any resolution.
 
 ## How it's run
 

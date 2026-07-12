@@ -1,0 +1,48 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/main_menu.gd" id="1_xqga4"]
+
+[node name="MainMenu" type="Control" unique_id=850477342]
+layout_mode = 3
+anchors_preset = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
+script = ExtResource("1_xqga4")
+
+[node name="VBox" type="VBoxContainer" parent="." unique_id=1325150208]
+layout_mode = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme_override_constants/separation = 32
+alignment = 1
+
+[node name="TitleLabel" type="Label" parent="VBox" unique_id=2131022844]
+layout_mode = 2
+theme_override_font_sizes/font_size = 64
+text = "menu.title"
+horizontal_alignment = 1
+
+[node name="Spacer" type="Control" parent="VBox" unique_id=865434914]
+custom_minimum_size = Vector2(0, 60)
+layout_mode = 2
+
+[node name="PlayButton" type="Button" parent="VBox" unique_id=1816713447]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(640, 140)
+layout_mode = 2
+size_flags_horizontal = 4
+text = "menu.play"
+
+[node name="LevelsButton" type="Button" parent="VBox" unique_id=1777170151]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(640, 140)
+layout_mode = 2
+size_flags_horizontal = 4
+text = "menu.levels"
+
+[node name="SettingsButton" type="Button" parent="VBox" unique_id=676576806]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(640, 140)
+layout_mode = 2
+size_flags_horizontal = 4
+text = "menu.settings"

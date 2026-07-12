@@ -1,0 +1,26 @@
+[gd_scene format=3]
+
+[node name="LevelSelect" type="Control" unique_id=227953064]
+layout_mode = 3
+anchors_preset = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
+
+[node name="VBox" type="VBoxContainer" parent="." unique_id=74388373]
+layout_mode = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme_override_constants/separation = 24
+alignment = 1
+
+[node name="TitleLabel" type="Label" parent="VBox" unique_id=1246090177]
+layout_mode = 2
+theme_override_font_sizes/font_size = 48
+text = "screen.level_select.title"
+horizontal_alignment = 1
+
+[node name="BodyLabel" type="Label" parent="VBox" unique_id=554360517]
+layout_mode = 2
+text = "screen.level_select.body"
+horizontal_alignment = 1
+autowrap_mode = 2

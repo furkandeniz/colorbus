@@ -33,6 +33,26 @@ func is_mobile() -> bool:
 	return current_platform == PlatformKind.ANDROID or current_platform == PlatformKind.IOS
 
 
+## Vibrates the device for a short haptic tick. Common interface for both
+## platforms; a genuine no-op wherever the platform doesn't support it
+## (desktop, or iOS -- Godot's handheld vibration API is Android-only).
+func vibrate(duration_ms: int = 50) -> void:
+	if current_platform == PlatformKind.ANDROID:
+		Input.vibrate_handheld(duration_ms)
+	# iOS/desktop: no-op by design, not a missing feature.
+
+
+## Requests the app close itself. Common interface for both platforms;
+## Android genuinely quits, iOS is a deliberate no-op (Apple's Human
+## Interface Guidelines direct apps to never quit themselves -- the user
+## backgrounds the app instead). Called from AppRouter when back is
+## pressed with nothing left to pop.
+func quit_app() -> void:
+	if current_platform == PlatformKind.ANDROID:
+		get_tree().quit()
+	# iOS/desktop: no-op by design, not a missing feature.
+
+
 ## Returns the safe area insets (in pixels, current screen space) as
 ## left/top/right/bottom margins that UI must not place content under
 ## (notches, rounded corners, home indicators, status bars).
