@@ -5,12 +5,17 @@ single GDScript codebase shared by Android and iOS.
 
 ## Status
 
-Milestone 2: app navigation shell and global service foundations. MainMenu
-(Play / Levels / Settings) navigates to LevelSelect and Settings placeholder
-screens through `AppRouter`, with centralized back navigation (in-app Back
-button and the Android hardware back button both funnel through the same
-code path). `SaveManager`, `SettingsManager` and `AudioManager` exist as
-foundations for later milestones. No game mechanics yet.
+Milestone 3: typed data model foundations, on top of Milestone 2's app
+navigation shell. MainMenu (Play / Levels / Settings) navigates to
+LevelSelect and Settings placeholder screens through `AppRouter`, with
+centralized back navigation (in-app Back button and the Android hardware
+back button both funnel through the same code path). `SaveManager`,
+`SettingsManager` and `AudioManager` exist as service foundations.
+`PassengerColor`/`PassengerData`/`BusData`/`PassengerQueueData`/
+`WaitingAreaData`/`LevelData`/`GameState`/`GameStateSnapshot` exist as the
+pure-data layer for gameplay (see
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)). No Passenger/Bus/Game scene
+or game mechanics exist yet.
 
 ## Tech stack
 
@@ -46,9 +51,9 @@ scenes/game/         gameplay scenes
 scenes/menus/        menu scenes
 scenes/ui/           reusable UI components
 scripts/core/        AppRouter, AudioManager, other cross-cutting services
-scripts/data/        SaveManager, SettingsManager, JSON loading/validation
-scripts/entities/    passenger/bus logic
-scripts/game/        puzzle/game logic
+scripts/data/        SaveManager, SettingsManager, PassengerColor, LevelData
+scripts/entities/    PassengerData, BusData (pure data, no scenes yet)
+scripts/game/        PassengerQueueData, WaitingAreaData, GameState(Snapshot)
 scripts/platform/    PlatformService and platform-specific code
 scripts/ui/          UI scripts (MainMenu, app shell)
 tests/               dependency-free GDScript test runner
@@ -85,6 +90,8 @@ This runs, in order:
    (`tests/verify_responsive_layout.gd`)
 8. App navigation check -- MainMenu -> LevelSelect -> back -> Settings ->
    Android back button -> back-at-root (`tests/verify_navigation.gd`)
+9. Typed data model checks -- construction, validation and round-tripping
+   for all 8 models (`tests/verify_data_models.gd`)
 
 Exits 0 only if every step above passes except the informational unused-
 script report. See `tools/validation/` for the individual checks and

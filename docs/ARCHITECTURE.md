@@ -117,10 +117,11 @@ reserved for future gameplay controls/bottom navigation.
 
 ## Data
 
-- Levels are authored as JSON under `data/levels/` and loaded through a
-  loader in `scripts/data/` (added when gameplay lands). JSON is validated
-  before use — malformed or missing fields must fail loudly, not silently
-  produce a broken level.
+- Levels are authored as JSON under `data/levels/` (no files exist yet --
+  the loader described below is ready, but no level content has been
+  authored, and no scene loads a level yet). JSON is validated before use —
+  malformed or missing fields must fail loudly, not silently produce a
+  broken level.
 - Local saves use `user://` exclusively, and store plain data only (no Node
   references), per [CLAUDE.md](../CLAUDE.md). `SaveManager`
   (`scripts/data/save_manager.gd`) is the loader/writer foundation
@@ -129,6 +130,63 @@ reserved for future gameplay controls/bottom navigation.
   preferences (audio volumes, language) separately from game saves, in
   `user://settings.json`. Both managers treat a missing or corrupt file as
   "use defaults", never as a crash.
+
+## Typed data models (Milestone 3)
+
+Pure data, no visual/Node reference anywhere, all `RefCounted` (chosen over
+`Resource`: these are loaded from JSON and mutated freely during play, and
+`Resource`'s default by-path caching/sharing semantics are the wrong fit for
+mutable runtime game state — `RefCounted` has no such surprises). No
+Passenger/Bus/Game *scene* exists yet; these are the data layer only.
+
+```
+PassengerColor          -- enum Value {RED, BLUE, YELLOW, GREEN, PURPLE}
+                           + the one JSON string <-> Value converter
+  ↓
+PassengerData           -- { color }
+BusData                 -- { color, capacity }
+  ↓
+PassengerQueueData      -- ordered Array[PassengerData] (one waiting line)
+  ↓
+WaitingAreaData         -- Array[PassengerQueueData] (all the waiting slots)
+  ↓
+LevelData               -- { level_id, waiting_area, bus_queue }, from JSON
+  ↓
+GameState               -- LevelData + in-progress play state (current_bus,
+                           moves_made, is_complete, is_failed)
+  ↓
+GameStateSnapshot       -- GameState frozen into a plain Dictionary
+```
+
+- **PassengerColor** (`scripts/data/passenger_color.gd`) is the single
+  central place JSON color strings become typed values.
+  `PassengerColor.from_string()` returns `PassengerColor.INVALID` (`-1`,
+  not a valid `Value`) for anything unrecognized — it never guesses or
+  silently falls back to a default color. Every other model's `is_valid()`
+  ultimately bottoms out in `PassengerColor.is_valid()`, so an unrecognized
+  color string anywhere in a level makes that whole level fail validation
+  rather than loading with a wrong/blank color.
+- Every model has an `is_valid()`, and validity composes: `LevelData.is_valid()`
+  checks `WaitingAreaData.is_valid()`, which checks every
+  `PassengerQueueData.is_valid()`, which checks every
+  `PassengerData.is_valid()`, which checks `PassengerColor.is_valid()`. One
+  bad color anywhere fails the whole chain.
+- `GameState` is the mutable "current play session" derived from a
+  `LevelData` via `GameState.from_level()` (which also pops the first bus
+  off the queue into `current_bus`). It still isn't a `GameController` —
+  no scene drives it yet, it's just the data such a controller will need.
+- **`GameStateSnapshot`** is the one place required to hold *only* plain
+  data: its `data` field is a `Dictionary` of primitives/Arrays/Dictionaries
+  built by `GameStateSnapshot.from_game_state()`, JSON-serializable via
+  `to_json_string()`/`from_json_string()`, and turned back into a live
+  `GameState` (with real `BusData`/`WaitingAreaData` instances) only by
+  `restore_game_state()`. This is what save/undo/replay will serialize —
+  never a `GameState` or any model object directly.
+- All the `from_dict()`/`from_array()` parsers are defensive: an
+  unexpected type at any field (not a String, not a Dictionary, not an
+  Array) is skipped rather than crashing the parse, and the resulting
+  model simply fails `is_valid()`. Nothing is ever silently coerced into a
+  guessed-correct value.
 
 ## Audio
 
@@ -157,3 +215,7 @@ volume is wired to the engine's built-in "Master" bus and reacts live to
   click/tap simulation isn't possible headlessly here (see the Input
   section above), so this exercises the same code path a button's
   `pressed` signal calls, not the button press itself.
+- The typed data models are verified by `tests/verify_data_models.gd`:
+  valid/invalid construction and round-tripping for all 8 models, plus a
+  recursive check that `GameStateSnapshot.data` genuinely contains no
+  `Object` (no stray model/Node reference hiding in the "pure data").
