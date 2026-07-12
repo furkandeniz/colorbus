@@ -1,0 +1,20 @@
+# Godot 4 generated/local files
+.godot/
+.import/
+export_presets.cfg.bak
+*.translation
+
+# Export output
+exports/*
+!exports/.gitkeep
+
+# macOS
+.DS_Store
+
+# VS Code (keep shared workspace settings, ignore local overrides)
+.vscode/*.local.json
+
+# Mono/.NET (not used, kept for safety)
+.mono/
+data_*/
+mono_crash.*.json

@@ -1,0 +1,22 @@
+{
+    "godotTools.editorPath.godot4": "/Applications/Godot.app/Contents/MacOS/Godot",
+    "files.associations": {
+        "*.gd": "gdscript",
+        "*.tscn": "godot-scene",
+        "*.tres": "godot-resource"
+    },
+    "files.exclude": {
+        "**/.godot": true,
+        "**/*.uid": true
+    },
+    "search.exclude": {
+        "**/.godot": true,
+        "**/exports": true
+    },
+    "editor.tabSize": 4,
+    "editor.insertSpaces": false,
+    "[gdscript]": {
+        "editor.tabSize": 4,
+        "editor.insertSpaces": false
+    }
+}
