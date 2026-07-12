@@ -1,0 +1,30 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/game/passenger_queue_test_screen.gd" id="1_y6n35"]
+
+[node name="PassengerQueueTestScreen" type="Control" unique_id=1125762563]
+layout_mode = 3
+anchors_preset = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
+script = ExtResource("1_y6n35")
+
+[node name="VBox" type="VBoxContainer" parent="." unique_id=755249036]
+layout_mode = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme_override_constants/separation = 32
+alignment = 1
+
+[node name="QueueRow" type="HBoxContainer" parent="VBox" unique_id=252751405]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_constants/separation = 48
+alignment = 1
+
+[node name="StatusLabel" type="Label" parent="VBox" unique_id=1329101842]
+unique_name_in_owner = true
+layout_mode = 2
+text = "status.no_selection"
+horizontal_alignment = 1

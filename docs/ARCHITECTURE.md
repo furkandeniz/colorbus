@@ -235,6 +235,55 @@ Passenger (Control, script=passenger.gd)
 - `passenger_selected(passenger)` fires from `_on_pressed()` (connected to
   the InputButton's `pressed`) only when `can_be_selected()` is true.
 
+## PassengerQueue scene (Milestone 5)
+
+`scenes/game/passenger_queue.tscn` / `scripts/game/passenger_queue.gd`
+stacks `Passenger` tokens vertically and enforces "only the front one is
+selectable." It `extends VBoxContainer` directly rather than wrapping one —
+one node, one array, no separate container reference to keep in sync.
+
+```
+PassengerQueue (VBoxContainer, script=passenger_queue.gd)
+├─ Passenger  (front -- selectable)
+├─ Passenger  (not selectable)
+└─ Passenger  (not selectable)
+```
+
+- **`configure(colors: Array[int])`** rebuilds the queue from a list of
+  `PassengerColor.Value`s (front = `colors[0]`), safe to call more than
+  once on the same instance (clears first). This mirrors `Passenger`'s own
+  `configure(color: int)` — the queue takes primitive typed data, not a
+  `PassengerQueueData`, keeping the view layer decoupled from the data
+  layer (a future `GameController`/`WaitingArea` bridges the two).
+- **Data order and visual order can never drift apart** because there's
+  only one collection: `_passengers: Array[Passenger]`, and every mutation
+  (`configure()`, `_on_remove_finished()`, `_clear()`) adds/removes from
+  both the array *and* the container's children together, in the same
+  place. There's no separate index to fall out of sync.
+- **Only the front is selectable**: `_refresh_selectable()` is the one
+  place that calls `Passenger.set_selectable()`, setting it `true` for
+  index 0 and `false` for everything else — and `false` for *everyone*,
+  including index 0, while the queue is locked.
+- **Removing the front advances the queue automatically**: `remove_front()`
+  locks the queue, fades the front passenger out (a `Tween` on
+  `modulate:a`), and only once that finishes does
+  `_on_remove_finished()` actually erase it from `_passengers`, unlock, and
+  call `_refresh_selectable()` again — which makes the new `_passengers[0]`
+  selectable without any extra code path.
+- **Locking during animation**: `_is_locked` blocks `remove_front()`
+  entirely (a second call while locked is a no-op) and blocks *all*
+  selection via `_refresh_selectable()`. This is what stops a rapid
+  double-tap or a double `remove_front()` call from ever removing the same
+  passenger twice — reinforced by a `_removed_passengers` dictionary guard
+  as defense in depth.
+- **`queue_emptied`** fires from `_on_remove_finished()` exactly when
+  `_passengers` becomes empty after a removal — not proactively checked
+  anywhere else.
+- `passenger_selected(passenger)` is simply forwarded from whichever
+  child's own `passenger_selected` fired (connected per-passenger in
+  `configure()`); the queue doesn't filter it beyond what `Passenger`
+  itself already gates via `can_be_selected()`.
+
 ## Audio
 
 `AudioManager` (`scripts/core/audio_manager.gd`) is a plumbing-only
@@ -275,3 +324,13 @@ volume is wired to the engine's built-in "Master" bus and reacts live to
   as the navigation test above. A separate, non-automated
   `scenes/entities/passenger_test.tscn` exists for a human to actually
   click through in the editor.
+- PassengerQueue is verified by `tests/verify_passenger_queue.gd`: only the
+  front is ever selectable, removing it advances the queue and promotes
+  the next one, the last removal emits `queue_emptied`, a queue can't be
+  double-removed (two `remove_front()` calls only ever remove one
+  passenger), and nothing is selectable while locked mid-animation. A
+  separate, non-automated `scenes/game/passenger_queue_test.tscn` shows
+  three queues side by side for manual clicking. Building this test
+  surfaced a real GDScript gotcha, not a PassengerQueue bug — see
+  [CLAUDE.md](../CLAUDE.md)'s "GDScript lambda closures capture by value"
+  section.

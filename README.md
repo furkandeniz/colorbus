@@ -5,19 +5,22 @@ single GDScript codebase shared by Android and iOS.
 
 ## Status
 
-Milestone 4: reusable Passenger scene, on top of Milestone 3's typed data
-models and Milestone 2's app navigation shell. MainMenu (Play / Levels /
-Settings) navigates to LevelSelect and Settings placeholder screens through
-`AppRouter`, with centralized back navigation (in-app Back button and the
-Android hardware back button both funnel through the same code path).
-`SaveManager`, `SettingsManager` and `AudioManager` exist as service
-foundations. `PassengerColor`/`PassengerData`/`BusData`/
-`PassengerQueueData`/`WaitingAreaData`/`LevelData`/`GameState`/
-`GameStateSnapshot` exist as the pure-data layer for gameplay.
-`scenes/entities/passenger.tscn` is the first actual game-entity scene: a
-colored, selectable passenger token with no external art (see
+Milestone 5: PassengerQueue scene, on top of Milestone 4's reusable
+Passenger scene, Milestone 3's typed data models, and Milestone 2's app
+navigation shell. MainMenu (Play / Levels / Settings) navigates to
+LevelSelect and Settings placeholder screens through `AppRouter`, with
+centralized back navigation (in-app Back button and the Android hardware
+back button both funnel through the same code path). `SaveManager`,
+`SettingsManager` and `AudioManager` exist as service foundations.
+`PassengerColor`/`PassengerData`/`BusData`/`PassengerQueueData`/
+`WaitingAreaData`/`LevelData`/`GameState`/`GameStateSnapshot` exist as the
+pure-data layer for gameplay. `scenes/entities/passenger.tscn` is a
+colored, selectable passenger token with no external art.
+`scenes/game/passenger_queue.tscn` stacks Passengers vertically, keeps only
+the front one selectable, advances automatically when it's removed, and
+emits `queue_emptied` once the last one is gone (see
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)). No Bus/Game scene, waiting
-area, or real gameplay flow exist yet -- Passenger isn't wired into
+area, or real gameplay flow exist yet -- PassengerQueue isn't wired into
 anything.
 
 ## Tech stack
@@ -50,13 +53,14 @@ docs/                architecture and process docs
 exports/             local export output (git-ignored)
 scenes/app/          root/app-shell scenes
 scenes/entities/     passenger.tscn, passenger_test.tscn (bus scenes later)
-scenes/game/         gameplay scenes
+scenes/game/         passenger_queue.tscn, passenger_queue_test.tscn
 scenes/menus/        menu scenes
 scenes/ui/           reusable UI components
 scripts/core/        AppRouter, AudioManager, other cross-cutting services
 scripts/data/        SaveManager, SettingsManager, PassengerColor, LevelData
 scripts/entities/    PassengerData, BusData (data) + Passenger (scene view)
-scripts/game/        PassengerQueueData, WaitingAreaData, GameState(Snapshot)
+scripts/game/        PassengerQueueData, WaitingAreaData, GameState(Snapshot),
+                     PassengerQueue (scene view)
 scripts/platform/    PlatformService and platform-specific code
 scripts/ui/          UI scripts (MainMenu, app shell)
 tests/               dependency-free GDScript test runner
@@ -97,6 +101,10 @@ This runs, in order:
    for all 8 models (`tests/verify_data_models.gd`)
 10. Passenger scene checks -- all 5 colors, the selectable/disabled/moving
     gates, and the move_to() Tween foundation (`tests/verify_passenger.gd`)
+11. PassengerQueue checks -- only the front passenger is ever selectable,
+    removing it advances the queue, the last removal emits `queue_emptied`,
+    and a queue can't be double-removed or selected mid-animation
+    (`tests/verify_passenger_queue.gd`)
 
 Exits 0 only if every step above passes except the informational unused-
 script report. See `tools/validation/` for the individual checks and

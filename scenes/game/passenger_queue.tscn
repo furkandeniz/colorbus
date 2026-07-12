@@ -1,0 +1,7 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/game/passenger_queue.gd" id="1_gxpaf"]
+
+[node name="PassengerQueue" type="VBoxContainer" unique_id=750385741]
+theme_override_constants/separation = 12
+script = ExtResource("1_gxpaf")

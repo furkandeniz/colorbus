@@ -3,8 +3,9 @@
 # Runs all automated quality checks: headless import, GDScript parse check,
 # JSON syntax check, broken res:// reference check, unused-script report,
 # a headless main-scene boot check, a responsive-layout check across 5
-# phone resolutions, an app-navigation check, a typed-data-model check, and
-# a Passenger scene check. Exits 0 only if every gating check passes.
+# phone resolutions, an app-navigation check, a typed-data-model check, a
+# Passenger scene check, and a PassengerQueue scene check. Exits 0 only if
+# every gating check passes.
 set -uo pipefail
 
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -49,7 +50,7 @@ echo "== Color Bus: Validate Project =="
 echo "Godot: $("$GODOT_BIN" --version)"
 echo
 
-echo "-- Step 1/6: headless import --"
+echo "-- Step 1/7: headless import --"
 IMPORT_LOG="$LOG_DIR/import.log"
 "$GODOT_BIN" --headless --path . --import >"$IMPORT_LOG" 2>&1
 import_status=$?
@@ -62,20 +63,23 @@ fi
 echo "Import: OK"
 echo
 
-echo "Step 2/6:"
+echo "Step 2/7:"
 run_step "script parse / JSON / resource-path / boot checks" "res://tools/validation/run_all.gd"
 
-echo "Step 3/6:"
+echo "Step 3/7:"
 run_step "responsive layout check (5 phone resolutions)" "res://tests/verify_responsive_layout.gd"
 
-echo "Step 4/6:"
+echo "Step 4/7:"
 run_step "app navigation check (MainMenu/LevelSelect/Settings/back)" "res://tests/verify_navigation.gd"
 
-echo "Step 5/6:"
+echo "Step 5/7:"
 run_step "typed data model checks" "res://tests/verify_data_models.gd"
 
-echo "Step 6/6:"
+echo "Step 6/7:"
 run_step "Passenger scene checks (5 colors, selectable/disabled/moving)" "res://tests/verify_passenger.gd"
+
+echo "Step 7/7:"
+run_step "PassengerQueue checks (front-only selection, advance, queue_emptied)" "res://tests/verify_passenger_queue.gd"
 
 echo "PASS: all checks passed"
 exit 0

@@ -68,6 +68,16 @@ name there fails the same way `--check-only -s` does. Work around it with
 *during* `_initialize()` (like `main_screen.gd`, loaded as part of
 instancing `main.tscn`) don't have this restriction.
 
+Similarly: right after adding a **new** `class_name` script, running a
+`--script` entry point that uses that class as a *type annotation*
+(`var x: NewClass`, `-> NewClass`) fails with `Could not find type "X" in
+the current scope` until the project has been re-imported (`godot
+--headless --path . --import`, step 1 of `tools/validate.sh`) at least
+once — the global class registry is populated at scan/import time, not
+freshly discovered by a bare `--script` run. If a brand-new class's tests
+fail this way, import first and retry before assuming the class itself is
+broken.
+
 ## Autoloads
 
 Only real global services are Autoload: `PlatformService`, `SaveManager`,
@@ -87,6 +97,21 @@ without re-verifying `pressed` still fires exactly once per interaction on
 both mouse and touch — this project's headless environment can't simulate
 GUI pointer input to re-check it automatically (see the note in
 `tests/verify_navigation.gd`), so this needs an actual device/editor check.
+
+## GDScript lambda closures capture by value
+
+A local variable reassigned *inside* a lambda (`func() -> void: flag =
+true`) does **not** propagate back to the enclosing function's variable —
+GDScript captures locals by value, so the lambda mutates its own private
+copy. This silently breaks the common test idiom "connect a signal to a
+lambda that flips a bool for later assertion." It only works by accident
+for reference types (`Array`/`Dictionary`/`Object`) because the *copy* is
+still a reference to the same underlying object, so `received.append(x)`
+or `state_dict["done"] = true` do work. When a test needs to observe
+whether a signal fired via a captured flag, wrap it: `var flag: Array =
+[false]`, lambda does `flag[0] = true`, caller checks `flag[0]` — never a
+bare `var flag: bool`. (Found and fixed in
+`tests/verify_passenger_queue.gd`.)
 
 ## Class naming gotcha
 
