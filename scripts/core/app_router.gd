@@ -6,7 +6,7 @@ extends Node
 ## register_screen_root(); screens themselves know nothing about each
 ## other and never hold direct references to one another.
 
-enum Screen { MAIN_MENU, LEVEL_SELECT, SETTINGS }
+enum Screen { MAIN_MENU, LEVEL_SELECT, SETTINGS, GAME }
 
 signal screen_changed(screen: Screen)
 
@@ -14,11 +14,31 @@ const SCREEN_SCENES: Dictionary = {
 	Screen.MAIN_MENU: "res://scenes/menus/main_menu.tscn",
 	Screen.LEVEL_SELECT: "res://scenes/menus/level_select.tscn",
 	Screen.SETTINGS: "res://scenes/menus/settings_panel.tscn",
+	Screen.GAME: "res://scenes/game/game_screen.tscn",
 }
+
+## Set by start_level() right before pushing Screen.GAME; GameScreen reads
+## this in _ready() to know which level to load. A plain field rather than
+## a full push_screen(screen, data) API since GAME is the only screen that
+## currently needs a parameter.
+var pending_level_id: int = 0
 
 var _screen_root: Node = null
 var _stack: Array[Screen] = []
 var _current_instance: Node = null
+
+
+## Convenience for "start playing level id" -- used by LevelSelect (and
+## GameScreen's own "next level" button). If we're already on Screen.GAME
+## (going from one level straight into the next), push_screen()'s
+## same-screen dedup guard would otherwise no-op and leave the old level's
+## GameScreen instance in place -- pop back out first so the push always
+## rebuilds a fresh GameScreen for the new pending_level_id.
+func start_level(level_id: int) -> void:
+	pending_level_id = level_id
+	if current_screen() == Screen.GAME:
+		pop_screen()
+	push_screen(Screen.GAME)
 
 
 func register_screen_root(container: Node) -> void:

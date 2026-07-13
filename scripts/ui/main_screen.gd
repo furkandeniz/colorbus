@@ -8,6 +8,7 @@ const SCREEN_TITLES: Dictionary = {
 	AppRouter.Screen.MAIN_MENU: "menu.title",
 	AppRouter.Screen.LEVEL_SELECT: "screen.level_select.title",
 	AppRouter.Screen.SETTINGS: "screen.settings.title",
+	AppRouter.Screen.GAME: "screen.game.title",
 }
 
 @onready var _safe_area: MarginContainer = %SafeArea

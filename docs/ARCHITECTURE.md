@@ -481,6 +481,96 @@ LevelData.from_dict(dict)                       -> LevelLoadResult (level=LevelD
   of a valid level in four different ways under `user://` to prove each
   rejection path actually rejects, without ever touching the real files).
 
+## GameScreen and GameController (Milestone 9)
+
+`scenes/game/game_screen.tscn` / `scripts/game/game_screen.gd` is the
+actual gameplay screen, pushed via `AppRouter.start_level(id)` (a fourth
+`Screen.GAME`, plus a `pending_level_id` field GameScreen reads in
+`_ready()` — the only screen so far that needs a parameter, so this is a
+minimal addition rather than a general `push_screen(screen, data)` API).
+`scripts/game/game_controller.gd` (`GameController`, **never Autoload** —
+constructed by `GameScreen` in `_ready()` and freed with it, a genuinely
+fresh state machine every level) is the play-session state machine.
+`scripts/game/game_rules.gd` (`GameRules`) carries the stateless decision
+logic (legal-move / auto-board / win checks) so `GameController` stays
+focused on *sequencing*, not *deciding* — this is the "delegate as much as
+possible to helper classes" split.
+
+```
+GameScreen._ready()
+  → LevelRepository.load_level_by_id(pending_level_id)
+  → builds empty BusQueue/WaitingArea/PassengerQueue×N view nodes
+      (GameController never instantiates a scene itself)
+  → GameController.new(level, bus_queue, waiting_area, passenger_queues)
+  → controller.start()
+```
+
+- **States**: `LOADING`, `PLAYING`, `MOVING_PASSENGER`, `WON`, `LOST`,
+  `PAUSED`. `state_changed(state)` drives `GameScreen`'s Win/Lose popups
+  and the Pause button's enabled state — `GameScreen` never decides
+  anything itself, only reacts.
+- **The one player input path**: `GameController` connects to every
+  `PassengerQueue.passenger_selected` (never to
+  `WaitingArea.passenger_selected` — per the rules, only a queue's front
+  passenger is ever actionable; a waiting passenger only moves again via
+  auto-boarding, below). `_on_queue_passenger_selected()` is a no-op unless
+  `state == PLAYING`, which is the single guard that satisfies both "no
+  new selection during animation" and "the same passenger can't be
+  processed twice" (reinforced further down by `PassengerQueue`'s own lock
+  and `Passenger`'s own `selectable` flag).
+- **Routing a selected passenger**: if the active bus `can_accept()` its
+  color, it boards the bus; otherwise, if the waiting area has room, it
+  goes there; otherwise the move is **rejected** — `queue.remove_front()`
+  only ever runs for an accepted move, so a rejected passenger stays
+  exactly where it was. `await queue.passenger_removed` (a signal added to
+  `PassengerQueue` for this — it previously only had `queue_emptied`, the
+  special case of the *last* passenger) is what lets `GameController` wait
+  for the fade-out animation before actually boarding/waiting the
+  passenger and returning to `PLAYING`.
+- **Auto-boarding**: `GameController` connects to
+  `BusQueue.active_bus_changed`; whenever a new bus becomes active,
+  `GameRules.auto_board_from_waiting_area()` boards every matching waiting
+  passenger in FIFO order (`WaitingArea.find_first_slot_of_color()` always
+  returns the earliest-added match) before anything else happens.
+- **Win**: `GameRules.is_level_won()` is just `bus_queue.active_bus() ==
+  null` — sufficient on its own given `LevelValidator` guarantees total
+  passengers equals total bus capacity, so every passenger must already be
+  boarded by the time every bus has completed in sequence.
+- **Loss — the important, explicitly-required nuance**: a rejected move
+  (waiting area full + color mismatch) does **not** by itself mean the
+  level is lost. `GameRules.has_any_legal_move()` sweeps every queue's
+  *current* front passenger and asks whether at least one of them either
+  matches the active bus or would fit in the waiting area; only when
+  **none** of them do is the level actually `LOST`. This check runs after
+  *every* mutating event (a rejected move, a successful move, an
+  auto-board pass) — not just rejections — because a *successful* move can
+  itself be the one that closes off the last remaining option (tested
+  explicitly: filling the last waiting slot with a now-permanently-
+  mismatched color traps whatever's left).
+- **A real bug integration testing caught**: `GameController.start()`
+  configures the waiting area and passenger queues *before* the bus queue,
+  not after. `BusQueue.configure()` synchronously emits
+  `active_bus_changed` the moment it becomes non-empty — and
+  `GameController` is already connected to that signal by the time
+  `start()` runs it, so configuring the bus queue first meant the very
+  first `_check_game_over()` pass ran against still-empty passenger
+  queues and wrongly concluded "no legal move" (a transient, then
+  self-corrected, `LOST` flash on every single level load). Reordering
+  fixed it — but see the next point too.
+- **A second, related bug**: because `board_passenger()`/a completing bus
+  can synchronously cascade all the way through `active_bus_changed` ->
+  auto-board -> `_check_game_over()` -> `WON`/`LOST` *before* the original
+  call site regains control, `_on_queue_passenger_selected()` and
+  `start()` must never unconditionally set `state = PLAYING` afterward —
+  only if the state isn't already `WON`/`LOST`. Both call sites now guard
+  on that explicitly; skipping this guard silently reverts a real win/loss
+  back to "still playing" the instant the winning/losing move itself
+  finishes processing.
+- **Debug logging**: `GameController._debug_log()` gates every print
+  behind `OS.is_debug_build()` — silent in a release export, verbose (one
+  line per state transition) everywhere else, including every headless
+  test run.
+
 ## Audio
 
 `AudioManager` (`scripts/core/audio_manager.gd`) is a plumbing-only
@@ -560,3 +650,16 @@ volume is wired to the engine's built-in "Master" bus and reacts live to
   validate, in id order, with strictly increasing difficulty. The broken-
   level cases write temporary files under `user://test_levels/` (cleaned
   up afterward) rather than ever touching the real `data/levels/` files.
+- GameController/GameRules are verified by `tests/verify_game_controller.gd`:
+  a full level-1 playthrough reaching `WON`; a mismatched color routing to
+  the waiting area instead of boarding; FIFO auto-boarding on an
+  active-bus change (including one where the auto-board itself wins the
+  level); a rejected move that does *not* end the game while a legal move
+  exists elsewhere, vs. a *successful* move that reveals a genuine
+  deadlock; that a passenger can't be processed twice from two
+  back-to-back taps; and — the actual "playable via MainMenu" proof — all
+  5 sample levels reaching `PLAYING` through the real
+  `main.tscn` -> `AppRouter.start_level()` -> `GameScreen` stack, not just
+  `GameController` exercised in isolation. Real click/tap simulation isn't
+  possible headlessly (see the Input section above), so "tapping" calls
+  `Passenger._on_pressed()` directly, same as every other test here.

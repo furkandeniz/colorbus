@@ -81,9 +81,11 @@ broken.
 ## Autoloads
 
 Only real global services are Autoload: `PlatformService`, `SaveManager`,
-`SettingsManager`, `AudioManager`, `AppRouter`. `GameController` and any
-future per-run game state must NOT be Autoload — they belong to the game
-scene's own tree so they can be reset between runs.
+`SettingsManager`, `AudioManager`, `AppRouter`. `GameController`
+(`scripts/game/game_controller.gd`) is deliberately **not** Autoload —
+it's a plain `RefCounted` constructed by `GameScreen` in `_ready()` and
+freed with it, so every level start is a genuinely fresh state machine,
+not persisted process-lifetime state.
 
 ## Input handling
 
@@ -112,6 +114,27 @@ whether a signal fired via a captured flag, wrap it: `var flag: Array =
 [false]`, lambda does `flag[0] = true`, caller checks `flag[0]` — never a
 bare `var flag: bool`. (Found and fixed in
 `tests/verify_passenger_queue.gd`.)
+
+## Synchronous signal cascades can finish a state machine mid-call
+
+A signal emitted from deep inside a call (e.g. `Bus.board_passenger()` ->
+`bus_completed` -> `BusQueue`'s handler -> `active_bus_changed` ->
+`GameController`'s handler -> auto-board -> another bus completing ->
+`_check_game_over()` -> `WON`) all runs **synchronously**, fully resolving
+before control returns to the original call site. Any caller that
+unconditionally sets state back to something like `PLAYING` right after
+that call (`board_passenger(color); state = PLAYING`) will silently stomp
+a `WON`/`LOST` that was *already* reached inside the cascade. Guard every
+such post-action state write with "only if not already terminal"
+(`if state != WON and state != LOST: state = PLAYING`). Also affects
+setup order: if a handler is connected before the objects it reacts to are
+fully configured (e.g. connecting to `BusQueue.active_bus_changed` before
+the passenger queues have any passengers in them), the first synchronous
+emission can run against still-empty state and reach the wrong
+conclusion — configure everything the handler might inspect *before*
+configuring whatever can emit the signal that triggers it. (Found and
+fixed in `GameController.start()`/`_on_queue_passenger_selected()` via
+`tests/verify_game_controller.gd`.)
 
 ## Class naming gotcha
 

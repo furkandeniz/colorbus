@@ -5,31 +5,25 @@ single GDScript codebase shared by Android and iOS.
 
 ## Status
 
-Milestone 8: JSON-based level system, on top of Milestone 7's WaitingSlot/
-WaitingArea, Milestone 6's Bus and BusQueue, Milestone 5's PassengerQueue,
-Milestone 4's reusable Passenger scene, Milestone 3's typed data models, and
-Milestone 2's app navigation shell. MainMenu (Play / Levels / Settings)
-navigates to LevelSelect and Settings placeholder screens through
-`AppRouter`, with centralized back navigation (in-app Back button and the
-Android hardware back button both funnel through the same code path).
+Milestone 9: the game actually plays. `GameScreen`/`GameController` (never
+Autoload -- owned solely by the GameScreen instance) wire together
+everything from Milestones 3-8: a level loads, buses/queues/the waiting
+area get built, tapping a queue's front passenger routes it to the active
+bus (if it matches) or the waiting area (if there's room), a new active bus
+auto-boards matching waiting passengers in FIFO order, and the level is won
+or lost (via real deadlock detection, not just "waiting area is full") as
+appropriate. All 5 sample levels are playable end to end via MainMenu ->
+Levels -> tap a level. `AppRouter` gained a fourth screen (`GAME`) and
+`start_level(id)`. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the
+full flow and two real bugs integration testing caught along the way.
+`LevelLoader`/`LevelValidator`/`LevelRepository` load, validate (with
+descriptive per-field errors) and enumerate `data/levels/*.json`.
 `SaveManager`, `SettingsManager` and `AudioManager` exist as service
-foundations. `LevelLoader`/`LevelValidator`/`LevelRepository` load, validate
-(with descriptive per-field errors) and enumerate `data/levels/*.json` --
-five sample levels, easy to hard, ship today. `PassengerColor`/
-`PassengerData`/`BusData`/`PassengerQueueData`/`LevelData`/`GameState`/
-`GameStateSnapshot` are the pure-data layer for gameplay.
-`scenes/entities/passenger.tscn` is a colored, selectable passenger token;
-`scenes/game/passenger_queue.tscn` stacks them vertically, keeping only the
-front selectable. `scenes/entities/bus.tscn` is a colored bus with a
-capacity, a fill indicator, and same-color boarding logic;
-`scenes/game/bus_queue.tscn` runs buses in sequence, only the first ever
-active. `scenes/entities/waiting_slot.tscn` holds at most one passenger;
-`scenes/game/waiting_area.tscn` is a row of them (default 3, resizable),
-filling the first empty slot, finding/removing by color, and always
-compacting left with no gaps left behind (see
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)). No Game scene and no real
-gameplay flow exist yet -- none of Passenger(Queue), Bus(Queue), WaitingArea,
-or the level system are wired to each other.
+foundations. `scenes/entities/passenger.tscn`/`bus.tscn`/`waiting_slot.tscn`
+and `scenes/game/passenger_queue.tscn`/`bus_queue.tscn`/`waiting_area.tscn`
+are the gameplay view layer; `PassengerColor`/`PassengerData`/`BusData`/
+`PassengerQueueData`/`LevelData`/`GameState`/`GameStateSnapshot` are the
+pure-data layer.
 
 ## Tech stack
 
@@ -62,9 +56,11 @@ exports/             local export output (git-ignored)
 scenes/app/          root/app-shell scenes
 scenes/entities/     passenger.tscn, bus.tscn, waiting_slot.tscn
                      (+ passenger_test.tscn)
-scenes/game/         passenger_queue.tscn, bus_queue.tscn, waiting_area.tscn
+scenes/game/         game_screen.tscn (the real gameplay screen),
+                     passenger_queue.tscn, bus_queue.tscn, waiting_area.tscn
                      (+ passenger_queue_test.tscn)
-scenes/menus/        menu scenes
+scenes/menus/        main_menu.tscn, level_select.tscn (lists all levels),
+                     settings_panel.tscn
 scenes/ui/           reusable UI components
 scripts/core/        AppRouter, AudioManager, other cross-cutting services
 scripts/data/        SaveManager, SettingsManager, PassengerColor, LevelData,
@@ -72,9 +68,10 @@ scripts/data/        SaveManager, SettingsManager, PassengerColor, LevelData,
 scripts/entities/    PassengerData, BusData (data) + Passenger, Bus,
                      WaitingSlot (views)
 scripts/game/        PassengerQueueData, GameState(Snapshot), PassengerQueue,
-                     BusQueue, WaitingArea (scene views)
+                     BusQueue, WaitingArea, GameController, GameRules,
+                     GameScreen
 scripts/platform/    PlatformService and platform-specific code
-scripts/ui/          UI scripts (MainMenu, app shell)
+scripts/ui/          UI scripts (MainMenu, app shell, LevelSelect)
 tests/               dependency-free GDScript test runner
 tools/validation/    automated project validation checks
 ```
@@ -133,6 +130,13 @@ This runs, in order:
     descriptive error, a nonexistent file fails gracefully (not a crash),
     and all 5 sample levels load and validate
     (`tests/verify_level_loading.gd`)
+16. GameController integration checks -- a full level playthrough reaching
+    WON, mismatched-color routing to the waiting area, FIFO auto-boarding
+    on an active-bus change (including one that wins the level), a
+    rejected move that doesn't end the game vs. one that reveals a real
+    deadlock, double-tap protection, and all 5 sample levels reaching
+    PLAYING through the real MainMenu -> LevelSelect -> AppRouter stack
+    (`tests/verify_game_controller.gd`)
 
 Exits 0 only if every step above passes except the informational unused-
 script report. See `tools/validation/` for the individual checks and

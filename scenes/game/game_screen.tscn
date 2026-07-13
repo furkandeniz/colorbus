@@ -1,0 +1,183 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/game/game_screen.gd" id="1_rs55t"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_h5hde"]
+bg_color = Color(0.14, 0.16, 0.2, 1)
+corner_radius_top_left = 24
+corner_radius_top_right = 24
+corner_radius_bottom_right = 24
+corner_radius_bottom_left = 24
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_u3wq2"]
+bg_color = Color(0.14, 0.16, 0.2, 1)
+corner_radius_top_left = 24
+corner_radius_top_right = 24
+corner_radius_bottom_right = 24
+corner_radius_bottom_left = 24
+
+[node name="GameScreen" type="Control" unique_id=1382061958]
+layout_mode = 3
+anchors_preset = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
+script = ExtResource("1_rs55t")
+
+[node name="SafeArea" type="MarginContainer" parent="." unique_id=94658776]
+unique_name_in_owner = true
+layout_mode = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
+
+[node name="RootVBox" type="VBoxContainer" parent="SafeArea" unique_id=1177426668]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="TopBar" type="ColorRect" parent="SafeArea/RootVBox" unique_id=679680461]
+custom_minimum_size = Vector2(0, 140)
+layout_mode = 2
+color = Color(0.16, 0.2, 0.32, 1)
+
+[node name="LevelInfoLabel" type="Label" parent="SafeArea/RootVBox/TopBar" unique_id=465070778]
+unique_name_in_owner = true
+layout_mode = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="PlayArea" type="VBoxContainer" parent="SafeArea/RootVBox" unique_id=1497568651]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 24
+
+[node name="BusArea" type="Control" parent="SafeArea/RootVBox/PlayArea" unique_id=1080117434]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 180)
+layout_mode = 2
+
+[node name="WaitingAreaContainer" type="Control" parent="SafeArea/RootVBox/PlayArea" unique_id=161739441]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 180)
+layout_mode = 2
+
+[node name="PassengerQueuesContainer" type="HBoxContainer" parent="SafeArea/RootVBox/PlayArea" unique_id=1212318518]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 32
+alignment = 1
+
+[node name="BottomControls" type="HBoxContainer" parent="SafeArea/RootVBox" unique_id=959246516]
+custom_minimum_size = Vector2(0, 140)
+layout_mode = 2
+theme_override_constants/separation = 24
+alignment = 1
+
+[node name="RestartButton" type="Button" parent="SafeArea/RootVBox/BottomControls" unique_id=224476263]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(200, 100)
+layout_mode = 2
+text = "controls.restart"
+
+[node name="PauseButton" type="Button" parent="SafeArea/RootVBox/BottomControls" unique_id=35187516]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(200, 100)
+layout_mode = 2
+text = "controls.pause"
+
+[node name="WinPopup" type="Control" parent="." unique_id=23135989]
+unique_name_in_owner = true
+visible = false
+anchors_preset = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
+
+[node name="Background" type="ColorRect" parent="WinPopup" unique_id=992201746]
+layout_mode = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0, 0, 0, 0.6)
+
+[node name="Center" type="CenterContainer" parent="WinPopup" unique_id=1241082368]
+layout_mode = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
+
+[node name="Panel" type="Panel" parent="WinPopup/Center" unique_id=2108543214]
+custom_minimum_size = Vector2(700, 500)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_h5hde")
+
+[node name="VBox" type="VBoxContainer" parent="WinPopup/Center/Panel" unique_id=1910063969]
+layout_mode = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme_override_constants/separation = 24
+alignment = 1
+
+[node name="TitleLabel" type="Label" parent="WinPopup/Center/Panel/VBox" unique_id=1297703288]
+layout_mode = 2
+theme_override_font_sizes/font_size = 48
+text = "popup.win.title"
+horizontal_alignment = 1
+
+[node name="WinNextButton" type="Button" parent="WinPopup/Center/Panel/VBox" unique_id=2126218497]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 100)
+layout_mode = 2
+text = "popup.win.next_level"
+
+[node name="WinMenuButton" type="Button" parent="WinPopup/Center/Panel/VBox" unique_id=402272810]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 100)
+layout_mode = 2
+text = "popup.win.menu"
+
+[node name="LosePopup" type="Control" parent="." unique_id=1607628785]
+unique_name_in_owner = true
+visible = false
+anchors_preset = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
+
+[node name="Background" type="ColorRect" parent="LosePopup" unique_id=534899924]
+layout_mode = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0, 0, 0, 0.6)
+
+[node name="Center" type="CenterContainer" parent="LosePopup" unique_id=522102139]
+layout_mode = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
+
+[node name="Panel" type="Panel" parent="LosePopup/Center" unique_id=1074739424]
+custom_minimum_size = Vector2(700, 500)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_u3wq2")
+
+[node name="VBox" type="VBoxContainer" parent="LosePopup/Center/Panel" unique_id=1285351650]
+layout_mode = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme_override_constants/separation = 24
+alignment = 1
+
+[node name="TitleLabel" type="Label" parent="LosePopup/Center/Panel/VBox" unique_id=558999344]
+layout_mode = 2
+theme_override_font_sizes/font_size = 48
+text = "popup.lose.title"
+horizontal_alignment = 1
+
+[node name="LoseRetryButton" type="Button" parent="LosePopup/Center/Panel/VBox" unique_id=1140065982]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 100)
+layout_mode = 2
+text = "popup.lose.retry"
+
+[node name="LoseMenuButton" type="Button" parent="LosePopup/Center/Panel/VBox" unique_id=1767039241]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 100)
+layout_mode = 2
+text = "popup.lose.menu"

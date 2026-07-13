@@ -8,6 +8,7 @@ extends VBoxContainer
 ## keep in sync).
 
 signal passenger_selected(passenger: Passenger)
+signal passenger_removed(color: int)
 signal queue_emptied
 
 const PassengerScene: PackedScene = preload("res://scenes/entities/passenger.tscn")
@@ -75,12 +76,16 @@ func remove_front() -> void:
 
 
 func _on_remove_finished(passenger: Passenger) -> void:
+	var color: int = passenger.color
+
 	_passengers.erase(passenger)
 	remove_child(passenger)
 	passenger.queue_free()
 
 	_is_locked = false
 	_refresh_selectable()
+
+	passenger_removed.emit(color)
 
 	if _passengers.is_empty():
 		queue_emptied.emit()
