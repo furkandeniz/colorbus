@@ -171,3 +171,46 @@ fixed in `GameController.start()`/`_on_queue_passenger_selected()` via
 Godot 4.7 has a **native** `ColorPalette` class. Any passenger/bus color
 lookup class must use a different name (e.g. `PassengerPalette`) to avoid a
 silent `class_name` collision.
+
+## project.godot enum-hint settings are typed by their declaration, not their editor label
+
+`display/window/handheld/orientation` (and similarly-declared settings)
+show as a friendly string dropdown ("Landscape", "Portrait", ...) in the
+editor's Project Settings UI, but the property is registered as
+`Variant::INT` with `PROPERTY_HINT_ENUM` in Godot's own C++ source
+(`core/config/project_settings.cpp`) — the on-disk/`project.godot` value
+must be the **integer** ordinal (`1` = Portrait), never the display
+string (`"portrait"`). A string value doesn't error anywhere; it silently
+survives as `"portrait"` and then evaluates to `0` (Landscape) wherever
+engine or export-plugin code does `int(get_project_setting(...))` on it —
+this project shipped with the wrong string form from Milestone 1 through
+Milestone 13 with nothing catching it (only became visible via the
+generated iOS `Info.plist` in Milestone 14; Android happened to still
+look right). When hand-editing `project.godot` for any enum-hint setting
+you didn't set via the editor UI, check the setting's actual declared
+`Variant` type in Godot's source first — don't assume the human-readable
+label string is the stored value.
+
+## iOS export template gotcha (Godot 4.7, Apple Silicon)
+
+The official 4.7.stable iOS export templates have a confirmed, open
+upstream bug ([godotengine/godot#118161](https://github.com/godotengine/godot/issues/118161)):
+`libgodot.ios.{debug,release}.xcframework`'s `ios-arm64_x86_64-simulator`
+slice claims (in the xcframework's own `Info.plist` manifest) to be a
+universal arm64+x86_64 binary, but the actual `libgodot.a` is x86_64-only
+(`lipo -info` confirms — `Non-fat file ... architecture: x86_64`, no
+arm64 object code at all, verified directly on the freshly-downloaded
+template zip, not just the exported project). Building the generated
+Xcode project for `-sdk iphonesimulator` on an Apple Silicon Mac normally
+fails to *link* (`Undefined symbols ... "_main"`) because Xcode tries to
+select the (missing) arm64 simulator objects. Forcing
+`ARCHS=x86_64 VALID_ARCHS=x86_64 ONLY_ACTIVE_ARCH=NO` gets it to build
+successfully — but a current iOS Simulator runtime on Apple Silicon then
+refuses to *install* that x86_64-only `.app` at all (`Failed to find
+matching arch for input file`; no Rosetta-translation path for Simulator
+app binaries in this environment). There is no project-side fix for
+this — it needs an upstream Godot template fix, or a from-source
+`libgodot` xcframework build (out of scope for a normal export task).
+Re-check `xcrun simctl list runtimes` behavior and this issue's status
+before assuming a future iOS Simulator build attempt is broken for some
+other reason.

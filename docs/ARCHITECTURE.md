@@ -19,6 +19,17 @@
 - `get_viewport().get_visible_rect().size` reflects the real window size
   under this configuration (not the reference resolution), which is what
   the debug label and the responsive test plan rely on.
+- `display/window/handheld/orientation` locks portrait: **must be the
+  integer `1`**, not the string `"portrait"` — the property is declared
+  as `Variant::INT` with an editor enum hint (`core/config/project_settings.cpp`:
+  `PROPERTY_HINT_ENUM, "Landscape,Portrait,..."`), so the *label* shown in
+  the editor's dropdown is a display convenience only. A string value
+  parses through `int(...)` as `0` (Landscape) wherever engine/export-plugin
+  code reads it that way — this project shipped with the wrong string
+  form from Milestone 1 through Milestone 13 without anything catching it
+  (Android's manifest generation happened to still look fine; the bug
+  only became externally visible via iOS's generated `Info.plist` in
+  Milestone 14 — see that section).
 
 ## Input
 
@@ -938,6 +949,112 @@ over the bare library floor.
   Store submission needs its own permanent, never-reused package id
   decided before first publish (an Android package id cannot be changed
   after release without becoming an entirely new app listing).
+
+## iOS export (Milestone 14)
+
+- **Toolchain check, this machine**: Xcode 26.6, `xcode-select` pointing
+  at `/Applications/Xcode.app/Contents/Developer`, license already
+  accepted (`xcodebuild -checkFirstLaunchStatus` exits 0 with no output),
+  `xcodebuild -showsdks` functional. No iOS Simulator runtime was
+  installed at all (`xcrun simctl list runtimes` was empty) — fetched via
+  `xcodebuild -downloadPlatform iOS` (~8.5GB). No code-signing identity
+  existed (`security find-identity -v -p codesigning` → 0 results), no
+  `~/Library/MobileDevice/Provisioning Profiles/`, no Xcode-managed
+  accounts (`defaults read com.apple.dt.Xcode IDEProvisioningTeams` →
+  domain doesn't exist) — so an Apple Team ID could not be detected from
+  the system at all; it's a required, blank field in the committed
+  preset template that only a developer with their own Apple account can
+  fill in (see the README's "iOS build" section).
+- **`application/app_store_team_id` is required even for an unsigned,
+  project-only export** — Godot hard-errors ("App Store Team ID not
+  specified") before it will generate anything, regardless of
+  `export_project_only`. There is no way to skip this even when no real
+  signing is intended; a syntactically-valid placeholder is enough to get
+  past this specific check (Godot doesn't validate it against Apple's
+  servers at project-generation time), which is how this milestone's
+  Xcode-project-generation and build were verified before a real Team ID
+  was available — the placeholder was removed again immediately after
+  and never appears in anything committed.
+- **`icons/icon_1024x1024` is also required**, unlike Android's tolerated
+  blank `launcher_icons/*` (which silently falls back to Godot's own
+  default icon) — a blank iOS icon fails export outright
+  (`Invalid icon (icons/settings_58x58): ''`, since every other required
+  icon size is derived from this one source and there was nothing to
+  derive from). `tools/generate_placeholder_icon.gd` generates a simple
+  temporary placeholder (`assets/icons/app_icon_1024.png`, a dark square
+  with the 5 passenger colors as dots) precisely so export has *something*
+  real to package; replace it with real app art before any real release.
+- **The portrait orientation bug this milestone found and fixed**: see
+  "Display configuration" above — `display/window/handheld/orientation`
+  must be the integer `1`, not the string `"portrait"`. Verified via the
+  actual generated `Info.plist`
+  (`exports/ios/colorbus/colorbus-Info.plist` and the built product's
+  `colorbus.app/Info.plist`): before the fix, both showed
+  `UIInterfaceOrientationLandscapeLeft`/`...LandscapeRight`; after
+  changing the project setting to `1`, both correctly show
+  `UIInterfaceOrientationPortrait` for iPhone and iPad. Confirmed via
+  Godot's own source
+  (`main/main.cpp`: `DisplayServerEnums::ScreenOrientation(int(GLOBAL_DEF_BASIC(...)))`,
+  `editor/export/editor_export_platform_apple_embedded.cpp`'s
+  `$interface_orientations` template substitution) that this is a plain
+  `int()` cast on whatever `ProjectSettings` holds — a String there
+  silently becomes `0` (Landscape), no error, no warning.
+- **`application/export_project_only=true`** generates just the Xcode
+  project sources (skipping archiving/signing/IPA-packaging entirely) —
+  the right setting whenever no distribution signing exists yet. Building
+  the generated project for the Simulator doesn't need signing at all
+  (`CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO`); only a real
+  device build or a full IPA/AAB-equivalent export needs a real
+  certificate + provisioning profile.
+- **A confirmed, open upstream Godot bug blocks a running Simulator
+  build on this machine**:
+  [godotengine/godot#118161](https://github.com/godotengine/godot/issues/118161).
+  The 4.7.stable export templates' `libgodot.ios.{debug,release}.xcframework`
+  declare their `ios-arm64_x86_64-simulator` slice as a universal
+  `arm64`+`x86_64` binary in the xcframework's own `Info.plist` manifest,
+  but the actual `libgodot.a` in that slice is `x86_64`-only —
+  `lipo -info` on it reports `Non-fat file ... architecture: x86_64`, no
+  arm64 object code at all (confirmed by extracting the *original*
+  downloaded template zip directly, ruling out export-time corruption).
+  This is NOT specific to this project; it would affect any Godot 4.7
+  project building for the Simulator on Apple Silicon. Every *other*
+  bundled xcframework (`MoltenVK.xcframework`) has a genuinely universal
+  simulator slice, confirming the defect is specific to Godot's own
+  `libgodot.a` packaging for this release.
+  - **Workaround that gets the build to link**: force
+    `ARCHS=x86_64 VALID_ARCHS=x86_64 ONLY_ACTIVE_ARCH=NO` — this avoids
+    ever asking the linker for the (missing) arm64 simulator objects.
+    `xcodebuild ... build` then reports `BUILD SUCCEEDED`.
+  - **Where it still stops**: `xcrun simctl install` on an iOS 26.5
+    Simulator runtime, Apple Silicon host, refuses the resulting
+    x86_64-only `.app` outright (`Failed to find matching arch for input
+    file`) — there is no Rosetta-translation path for Simulator app
+    *binaries* in this environment (unlike full macOS Rosetta). A
+    speculative attempt to download an older (iOS 17.5) runtime to test
+    whether an older Simulator/Xcode combination still tolerates x86_64
+    was abandoned before completing: the architecture check almost
+    certainly lives in the *host's* CoreSimulator daemon (tied to the
+    installed Xcode version), not the guest runtime, so a different
+    runtime version wouldn't change the outcome — not worth an ~8GB
+    download to confirm.
+  - **What would actually resolve this**: an upstream Godot template fix
+    (issue is open, no target version yet), or building Godot's
+    `libgodot` xcframework from source with a correct arm64 Simulator
+    slice (a substantial SCons/C++ build undertaking, well beyond this
+    milestone's scope), or testing on an older Mac/Xcode combination that
+    still supports x86_64 Simulator app translation.
+  - **What this does NOT put in doubt**: the Xcode project itself
+    generates correctly, the build compiles and links successfully, the
+    portrait-orientation fix is verified in the real output, and the
+    icon/bundle-id/app-name configuration all take effect exactly as
+    configured — the only broken link in the chain is Godot's own
+    precompiled binary artifact for this one specific target.
+- **No physical iPhone/iPad was connected** during this milestone
+  (`xcrun xctrace list devices` only lists the Mac itself) — the device
+  build path was therefore not exercised beyond confirming what it would
+  need (a real Apple Development signing identity + a provisioning
+  profile listing the device's UDID, both interactive, Apple-account-tied
+  steps that can't be scripted or committed).
 
 ## Testing
 
