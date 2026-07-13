@@ -5,6 +5,23 @@ single GDScript codebase shared by Android and iOS.
 
 ## Status
 
+Milestone 13: Android export infrastructure. `export_presets.cfg` (local,
+git-ignored -- see the Android build section below) defines a debug APK
+preset (package id temporarily `com.furkandeniz.colorbus`, portrait via
+the existing `display/window/handheld/orientation` project setting,
+architecture `arm64-v8a`) and a release AAB preset (uses Godot's Gradle
+build, since AAB output requires it; no keystore is configured, so a real
+release build fails until a developer supplies their own -- deliberately,
+per "never commit signing secrets"). The debug preset builds and installs
+cleanly with the project's already-installed toolchain (Java 17, Android
+SDK platform-tools/platforms/build-tools) using Godot's precompiled export
+templates, no Gradle/NDK/CMake needed. Verified end-to-end on a headless
+Android emulator: install, launch, and `adb logcat` all confirm the app
+boots to a running main loop with zero crashes/ANRs. See the Android
+build section below for every command, and
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for why min/target SDK are
+left at Godot's own template defaults rather than overridden.
+
 Milestone 12: 20 MVP levels, controlled-designed (not random) across 5
 difficulty tiers -- two colors (1-3), three colors + waiting area (4-7),
 four colors + a more complex, repeated-color bus queue (8-12), five colors
@@ -98,9 +115,12 @@ pure-data layer.
 
 - Godot 4.7 (Standard)
 - Godot export templates matching the installed Godot version
-- Java 17 (Android build)
-- Android SDK (cmdline-tools, platform-tools, build-tools, platform,
-  emulator)
+- Java 17 (Android build) -- Godot 4.7's official requirement; newer JDKs
+  work but 17 is what's verified here
+- Android SDK: `platform-tools` >= 35.0.0, at least one recent platform
+  (`android-35`/`android-36`), a matching `build-tools` version, and
+  `cmdline-tools` -- see the Android build section below for exact
+  versions verified against this project
 - Xcode + Command Line Tools (iOS build, macOS only)
 
 ## Project layout
@@ -227,6 +247,114 @@ This runs, in order:
 Exits 0 only if every step above passes except the informational unused-
 script report. See `tools/validation/` for the individual checks and
 [CLAUDE.md](CLAUDE.md) for when to run this.
+
+## Android build
+
+### One-time toolchain setup
+
+Set these in your shell profile (adjust paths to your own install):
+
+```bash
+export ANDROID_HOME="/opt/homebrew/share/android-commandlinetools"   # or wherever you installed the SDK
+export ANDROID_SDK_ROOT="$ANDROID_HOME"
+export JAVA_HOME="/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home"
+export PATH="$PATH:$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/emulator:$JAVA_HOME/bin"
+```
+
+Verify the toolchain matches Godot 4.7's official Android export
+requirements (docs.godotengine.org/en/stable/tutorials/export/exporting_for_android.html):
+
+```bash
+java -version                                    # need OpenJDK 17
+adb --version                                    # platform-tools >= 35.0.0
+sdkmanager --list_installed                      # need platforms;android-35 (or newer) + a matching build-tools
+```
+
+Then, in the Godot editor (**Editor > Editor Settings > Export > Android**,
+a one-time machine-global setting, not part of the project), set:
+
+- **Java SDK Path** -> `$JAVA_HOME`
+- **Android SDK Path** -> `$ANDROID_HOME` (must contain `platform-tools/adb`)
+
+### Export presets
+
+`export_presets.cfg` is **git-ignored** (along with `*.keystore`/`*.jks`)
+because Godot writes keystore paths/passwords into it in plain text the
+moment you fill them into the export dialog -- never something to commit,
+even for the debug keystore. Recreate it locally via **Project > Export...**
+in the editor, or copy `export_presets.cfg.example` (committed, contains no
+secrets -- every keystore field is intentionally blank) to
+`export_presets.cfg` and adjust paths for your machine. It defines two
+presets:
+
+- **`Android`** -- debug APK, `com.furkandeniz.colorbus` (temporary package
+  id -- change before any real release), portrait (from the project's
+  `display/window/handheld/orientation` setting, not a per-preset field),
+  `arm64-v8a` only, using Godot's precompiled export templates
+  (`gradle_build/use_gradle_build=false`) -- no Gradle/NDK/CMake required.
+  Min/target SDK are left at Godot's own template defaults rather than
+  overridden, since overriding either **requires** `use_gradle_build=true`
+  (Godot raises a hard export error otherwise) -- see
+  [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+- **`Android (Release AAB)`** -- release, Android App Bundle format. AAB
+  output itself requires `gradle_build/use_gradle_build=true` (a separate
+  Godot requirement from the min/target SDK one above), which additionally
+  needs the Android Gradle build template installed
+  (**Project > Install Android Build Template**, not done here -- it adds
+  a full Gradle project under `res://android/` that's normally committed
+  once installed) and network access for Gradle to resolve dependencies.
+  `keystore/release`, `keystore/release_user`, and `keystore/release_password`
+  are **deliberately blank** -- exporting this preset for real fails
+  until you point it at your own keystore; that failure is correct
+  behavior, not a bug. Generate one with:
+
+  ```bash
+  keytool -v -genkey -keystore /path/outside/this/repo/release.keystore -alias colorbus -keyalg RSA -validity 10000
+  ```
+
+  Never generate or store a release keystore inside this repository, and
+  never fill its path/password into a version-controlled file. The debug
+  keystore (Godot's own, autogenerated, password always `"android"`) is
+  fine to reference locally since it only ever signs non-distributable
+  debug builds -- but the two must never be confused: only the release
+  keystore's signature is accepted by the Play Store / matches previously
+  published app updates.
+
+### Building the debug APK
+
+```bash
+mkdir -p exports/android
+godot --headless --path . --export-debug "Android" exports/android/colorbus.apk
+```
+
+Produces a signed `exports/android/colorbus.apk` (and a `.idsig` file)
+using the debug keystore configured in Editor Settings.
+
+### Installing and running it
+
+```bash
+adb devices -l                       # lists connected devices/emulators
+
+# No device connected? Create/start an emulator:
+avdmanager list avd                                          # see what already exists
+emulator -avd <avd_name> -no-window -no-audio -no-boot-anim &  # boot it headlessly
+adb wait-for-device
+until [ "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1" ]; do sleep 5; done
+
+adb install -r exports/android/colorbus.apk
+adb shell am start -n com.furkandeniz.colorbus/com.godot.game.GodotAppLauncher
+
+# Check for a launch crash:
+adb logcat -d | grep -iE "FATAL EXCEPTION|AndroidRuntime: FATAL|ANR in|has died"
+adb shell pidof com.furkandeniz.colorbus   # non-empty = still running, not crashed
+```
+
+A `-no-window` emulator (no attached display) may fail to present frames
+to `screencap`/a real display surface (harmless `Couldn't present to
+Vulkan queue` log lines) even though the app itself is running fine --
+that's a headless-emulator display limitation, not a crash; the
+logcat/`pidof` checks above are the actual signal to trust, not a
+screenshot.
 
 ## Development rules
 

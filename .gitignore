@@ -1,8 +1,13 @@
 # Godot 4 generated/local files
 .godot/
 .import/
+export_presets.cfg
 export_presets.cfg.bak
 *.translation
+
+# Android/iOS signing material -- never committed, see README's Android section
+*.keystore
+*.jks
 
 # Export output
 exports/*

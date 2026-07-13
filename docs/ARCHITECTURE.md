@@ -863,6 +863,82 @@ top of the previous tier's, never several at once:
   change (loosen a color's queue position, add a waiting slot, or reorder
   a bus), and re-run, rather than regenerating a level from scratch.
 
+## Android export (Milestone 13)
+
+Godot's official Android export requirements (per
+docs.godotengine.org/en/stable/tutorials/export/exporting_for_android.html,
+verified against the exact 4.7-stable source): OpenJDK 17, Android SDK
+`platform-tools` >= 35.0.0, and a recent platform + matching build-tools.
+The 4.7-stable `platform/android/export/export_plugin.cpp` source pins
+`DEFAULT_MIN_SDK_VERSION = 24` (the floor Godot's own library needs) and
+`DEFAULT_TARGET_SDK_VERSION = 36`; the Vulkan-based renderers (this
+project uses `rendering_method="mobile"`, i.e. Forward Mobile/Vulkan, not
+GL Compatibility) additionally recommend `VULKAN_MIN_SDK_VERSION = 29`
+over the bare library floor.
+
+- **Two export gotchas found empirically, not documented anywhere obvious**:
+  1. `gradle_build/min_sdk`/`gradle_build/target_sdk` can **only** be set
+     when `gradle_build/use_gradle_build=true` — leaving them non-empty
+     with the (default) precompiled-template build path is a **hard
+     export error** ("Min/Target SDK can only be overridden when Use
+     Gradle Build is enabled"), not a warning, not a silent ignore.
+  2. **AAB output itself requires `gradle_build/use_gradle_build=true`**
+     — a separate requirement from the SDK-override one above. Enabling
+     it in turn requires the Android Gradle build template installed
+     under `res://android/` (**Project > Install Android Build Template**
+     in the editor) before export will proceed at all.
+- **This project's actual export setup, given those two constraints**:
+  the `Android` (debug APK) preset uses the precompiled export templates
+  (`gradle_build/use_gradle_build=false`) — the simpler, no-Gradle/NDK/
+  CMake-needed path, appropriate since this project has no native
+  plugins/GDExtensions. Its min/target SDK are therefore left at
+  whatever Godot's own precompiled templates were built with (which
+  already matches the `DEFAULT_MIN_SDK_VERSION`/`DEFAULT_TARGET_SDK_VERSION`
+  constants above), rather than fighting the override restriction for no
+  real benefit. The `Android (Release AAB)` preset *does* set
+  `gradle_build/use_gradle_build=true` (mandatory for AAB) with explicit
+  `min_sdk="29"` (the Vulkan-recommended floor) and `target_sdk="36"` —
+  but the Android Gradle build template was deliberately **not** installed
+  this milestone (it's a substantial scaffold under `res://android/` that
+  needs network access for Gradle to resolve dependencies on first build),
+  so this preset is correctly *configured* and ready, without a
+  fully-buildable artifact yet. See the README's "Android build" section
+  for the exact remaining manual steps.
+- **Signing, and why two files exist**: `export_presets.cfg` is
+  git-ignored (Godot writes keystore paths/passwords into it in plain
+  text the moment the export dialog's keystore fields are filled in —
+  true even for the well-known-password debug keystore, so it's never
+  safe to commit as-is). `export_presets.cfg.example` **is** committed —
+  identical shape, but every `keystore/*` field is blank, so it carries
+  zero secrets; a fresh clone copies it to `export_presets.cfg` and fills
+  in machine-specific paths locally. The debug preset's `keystore/debug`
+  is left blank too, deliberately, so it falls back to the debug keystore
+  path already configured once in Godot's own (machine-global, not
+  project) Editor Settings — never duplicated into a project file. The
+  release preset's `keystore/release*` fields are blank on principle: a
+  real release keystore must never be generated inside, referenced from,
+  or have its password stored in this repository at all.
+- **Verified on a real headless Android emulator** (`ColorBus_Test`,
+  Pixel 6 profile, API 34, arm64-v8a): the debug APK installs via `adb
+  install`, launches via `adb shell am start -n
+  com.furkandeniz.colorbus/com.godot.game.GodotAppLauncher` (Godot 4's
+  actual launcher activity class, not the package name alone), and
+  `adb logcat` shows the engine initializing, the main loop starting, and
+  this project's own `[ColorBus] viewport=...` boot log — with zero
+  `FATAL EXCEPTION`/ANR/`has died` entries and the process still alive
+  seconds later. A `-no-window` (headless, no attached display) emulator
+  logs harmless `Couldn't present to Vulkan queue (VkResult error 5)`
+  lines and produces an all-black `adb exec-out screencap` — reproduced
+  identically under both `-gpu swiftshader_indirect` (software) and
+  `-gpu host` (real Apple M-series GPU passthrough), so it's a
+  headless-emulator display-surface limitation, not an app crash or a
+  renderer bug; `logcat`/`pidof`, not a screenshot, are the trustworthy
+  signal for "did it crash on launch" in this environment.
+- **`com.furkandeniz.colorbus` is explicitly temporary**: a real Play
+  Store submission needs its own permanent, never-reused package id
+  decided before first publish (an Android package id cannot be changed
+  after release without becoming an entirely new app listing).
+
 ## Testing
 
 - `tests/` holds a dependency-free GDScript test runner for pure-logic code
