@@ -5,26 +5,28 @@ single GDScript codebase shared by Android and iOS.
 
 ## Status
 
-Milestone 6: Bus and BusQueue scenes, on top of Milestone 5's PassengerQueue,
-Milestone 4's reusable Passenger scene, Milestone 3's typed data models, and
-Milestone 2's app navigation shell. MainMenu (Play / Levels / Settings)
-navigates to LevelSelect and Settings placeholder screens through
-`AppRouter`, with centralized back navigation (in-app Back button and the
-Android hardware back button both funnel through the same code path).
-`SaveManager`, `SettingsManager` and `AudioManager` exist as service
-foundations. `PassengerColor`/`PassengerData`/`BusData`/
-`PassengerQueueData`/`WaitingAreaData`/`LevelData`/`GameState`/
-`GameStateSnapshot` exist as the pure-data layer for gameplay.
-`scenes/entities/passenger.tscn` is a colored, selectable passenger token;
-`scenes/game/passenger_queue.tscn` stacks them vertically, keeping only the
-front selectable and advancing automatically as they're removed.
-`scenes/entities/bus.tscn` is a colored bus with a capacity, a fill
-indicator, and same-color boarding logic; `scenes/game/bus_queue.tscn` runs
-buses in sequence, only the first ever active, advancing (and eventually
-completing) automatically as each bus fills up (see
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)). No WaitingArea or Game scene,
-and no real gameplay flow, exist yet -- Passenger/PassengerQueue and
-Bus/BusQueue aren't wired to each other.
+Milestone 7: WaitingSlot/WaitingArea scenes, on top of Milestone 6's Bus and
+BusQueue, Milestone 5's PassengerQueue, Milestone 4's reusable Passenger
+scene, Milestone 3's typed data models, and Milestone 2's app navigation
+shell. MainMenu (Play / Levels / Settings) navigates to LevelSelect and
+Settings placeholder screens through `AppRouter`, with centralized back
+navigation (in-app Back button and the Android hardware back button both
+funnel through the same code path). `SaveManager`, `SettingsManager` and
+`AudioManager` exist as service foundations. `PassengerColor`/
+`PassengerData`/`BusData`/`PassengerQueueData`/`WaitingAreaData`/
+`LevelData`/`GameState`/`GameStateSnapshot` exist as the pure-data layer for
+gameplay. `scenes/entities/passenger.tscn` is a colored, selectable
+passenger token; `scenes/game/passenger_queue.tscn` stacks them vertically,
+keeping only the front selectable. `scenes/entities/bus.tscn` is a colored
+bus with a capacity, a fill indicator, and same-color boarding logic;
+`scenes/game/bus_queue.tscn` runs buses in sequence, only the first ever
+active. `scenes/entities/waiting_slot.tscn` holds at most one passenger;
+`scenes/game/waiting_area.tscn` is a row of them (default 3, resizable),
+filling the first empty slot, finding/removing by color, and always
+compacting left with no gaps left behind (see
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)). No Game scene and no real
+gameplay flow exist yet -- none of Passenger(Queue), Bus(Queue), or
+WaitingArea are wired to each other.
 
 ## Tech stack
 
@@ -55,16 +57,18 @@ data/levels/        JSON level definitions
 docs/                architecture and process docs
 exports/             local export output (git-ignored)
 scenes/app/          root/app-shell scenes
-scenes/entities/     passenger.tscn, bus.tscn (+ passenger_test.tscn)
-scenes/game/         passenger_queue.tscn, bus_queue.tscn
+scenes/entities/     passenger.tscn, bus.tscn, waiting_slot.tscn
+                     (+ passenger_test.tscn)
+scenes/game/         passenger_queue.tscn, bus_queue.tscn, waiting_area.tscn
                      (+ passenger_queue_test.tscn)
 scenes/menus/        menu scenes
 scenes/ui/           reusable UI components
 scripts/core/        AppRouter, AudioManager, other cross-cutting services
 scripts/data/        SaveManager, SettingsManager, PassengerColor, LevelData
-scripts/entities/    PassengerData, BusData (data) + Passenger, Bus (views)
+scripts/entities/    PassengerData, BusData (data) + Passenger, Bus,
+                     WaitingSlot (views)
 scripts/game/        PassengerQueueData, WaitingAreaData, GameState(Snapshot),
-                     PassengerQueue, BusQueue (scene views)
+                     PassengerQueue, BusQueue, WaitingArea (scene views)
 scripts/platform/    PlatformService and platform-specific code
 scripts/ui/          UI scripts (MainMenu, app shell)
 tests/               dependency-free GDScript test runner
@@ -115,6 +119,11 @@ This runs, in order:
 13. BusQueue checks -- only the first bus is active, filling it advances to
     the next (`active_bus_changed`), and completing the last bus completes
     the queue (`bus_queue_completed`) (`tests/verify_bus_queue.gd`)
+14. WaitingArea checks -- adding to the first empty slot, rejecting
+    additions once full, finding a passenger by color, left-compaction
+    after a removal, a dynamic slot count (including one derived from
+    `LevelData`), and the full/emptied/added/removed signals
+    (`tests/verify_waiting_area.gd`)
 
 Exits 0 only if every step above passes except the informational unused-
 script report. See `tools/validation/` for the individual checks and

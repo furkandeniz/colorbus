@@ -1,0 +1,8 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/game/waiting_area.gd" id="1_10m72"]
+
+[node name="WaitingArea" type="HBoxContainer" unique_id=441162507]
+size_flags_horizontal = 4
+theme_override_constants/separation = 16
+script = ExtResource("1_10m72")

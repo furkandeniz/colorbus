@@ -4,8 +4,9 @@
 # JSON syntax check, broken res:// reference check, unused-script report,
 # a headless main-scene boot check, a responsive-layout check across 5
 # phone resolutions, an app-navigation check, a typed-data-model check, a
-# Passenger scene check, a PassengerQueue scene check, a Bus scene check,
-# and a BusQueue scene check. Exits 0 only if every gating check passes.
+# Passenger scene check, a PassengerQueue scene check, a Bus scene check, a
+# BusQueue scene check, and a WaitingArea scene check. Exits 0 only if
+# every gating check passes.
 set -uo pipefail
 
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -50,7 +51,7 @@ echo "== Color Bus: Validate Project =="
 echo "Godot: $("$GODOT_BIN" --version)"
 echo
 
-echo "-- Step 1/9: headless import --"
+echo "-- Step 1/10: headless import --"
 IMPORT_LOG="$LOG_DIR/import.log"
 "$GODOT_BIN" --headless --path . --import >"$IMPORT_LOG" 2>&1
 import_status=$?
@@ -63,29 +64,32 @@ fi
 echo "Import: OK"
 echo
 
-echo "Step 2/9:"
+echo "Step 2/10:"
 run_step "script parse / JSON / resource-path / boot checks" "res://tools/validation/run_all.gd"
 
-echo "Step 3/9:"
+echo "Step 3/10:"
 run_step "responsive layout check (5 phone resolutions)" "res://tests/verify_responsive_layout.gd"
 
-echo "Step 4/9:"
+echo "Step 4/10:"
 run_step "app navigation check (MainMenu/LevelSelect/Settings/back)" "res://tests/verify_navigation.gd"
 
-echo "Step 5/9:"
+echo "Step 5/10:"
 run_step "typed data model checks" "res://tests/verify_data_models.gd"
 
-echo "Step 6/9:"
+echo "Step 6/10:"
 run_step "Passenger scene checks (5 colors, selectable/disabled/moving)" "res://tests/verify_passenger.gd"
 
-echo "Step 7/9:"
+echo "Step 7/10:"
 run_step "PassengerQueue checks (front-only selection, advance, queue_emptied)" "res://tests/verify_passenger_queue.gd"
 
-echo "Step 8/9:"
+echo "Step 8/10:"
 run_step "Bus checks (color match, capacity, completion)" "res://tests/verify_bus.gd"
 
-echo "Step 9/9:"
+echo "Step 9/10:"
 run_step "BusQueue checks (active bus advance, bus_queue_completed)" "res://tests/verify_bus_queue.gd"
+
+echo "Step 10/10:"
+run_step "WaitingArea checks (first-empty-slot, full/empty, compaction, dynamic size)" "res://tests/verify_waiting_area.gd"
 
 echo "PASS: all checks passed"
 exit 0

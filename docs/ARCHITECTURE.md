@@ -349,6 +349,65 @@ BusQueue (HBoxContainer, script=bus_queue.gd)
   **`bus_queue_completed`** fires once `_active_index` moves past the last
   bus — i.e. every bus has completed in sequence.
 
+## WaitingSlot and WaitingArea scenes (Milestone 7)
+
+`scenes/entities/waiting_slot.tscn` / `scripts/entities/waiting_slot.gd` is
+a single position holding at most one `Passenger`; `scenes/game/
+waiting_area.tscn` / `scripts/game/waiting_area.gd` is a row of them
+(default 3, resizable via `configure(slot_count)`, e.g. from
+`LevelData.waiting_area.slot_count()`). Unlike `PassengerQueue` (a strict
+FIFO where only the front is ever touched), a `WaitingArea` allows adding
+to the first empty slot, finding/removing *any* waiting passenger by
+color, and always compacts the rest left afterward — closer to a small
+parking/holding row than a line.
+
+```
+WaitingArea (HBoxContainer, script=waiting_area.gd)
+├─ WaitingSlot  (holds a Passenger, or empty)
+├─ WaitingSlot
+└─ WaitingSlot
+```
+
+- **`_occupancy: Array[int]`** (one `PassengerColor.Value` or
+  `PassengerColor.INVALID` per slot) is the single source of truth — safe,
+  plain data, never a set of Node references, directly satisfying "use
+  safe data instead of Node references." Every mutation
+  (`add_passenger()`, `remove_passenger_at()`, `configure()`) updates
+  `_occupancy` first; `_render_slot()`/the loop in `remove_passenger_at()`
+  then make the actual `Passenger` nodes match it. Compaction is
+  implemented as **re-deriving what should be on screen from data**, not
+  as moving existing `Passenger` nodes between `WaitingSlot`s — simpler and
+  more robust than reparenting live nodes mid-animation-adjacent logic,
+  at the cost of recreating a few `Passenger` instances on every removal
+  (acceptable here since nothing requires preserving a specific instance
+  across a compaction, unlike `PassengerQueue`'s fade-out).
+- **`WaitingSlot` makes no decisions** — `is_empty()`/`get_color()`/
+  `set_passenger()`/`clear()` are its whole surface. `WaitingArea` owns
+  every rule (first-empty-slot placement, arrival order, compaction,
+  capacity); this keeps "business logic and visual layer separated"
+  literal, not just a comment.
+- **`get_slot_color(index)`** and **`find_first_slot_of_color(color)`**
+  return plain data (a color, a slot index) rather than a `Passenger`
+  reference — the safe way to query the area's contents without touching
+  a Node at all.
+- **Signals**: `passenger_added(color, slot_index)` /
+  `passenger_removed(color, slot_index)` fire on every successful
+  add/remove; `waiting_area_full` fires the instant the last empty slot
+  fills; `waiting_area_emptied` fires the instant the last passenger is
+  removed. `passenger_selected(passenger, slot_index)` also forwards each
+  slot's `Passenger.passenger_selected` — not explicitly required by this
+  milestone's spec, but added for consistency with `PassengerQueue` (which
+  has the same signal) and because a `WaitingArea` with literally no way
+  to react to a tap would be a real gap given where this project is
+  headed (a `GameController` will need it to know which waiting passenger
+  was selected).
+- **Responsive/safe-area compliance** here just means "behave like a
+  normal Godot Container": `WaitingArea` is an `HBoxContainer` (reflows on
+  its own), and `WaitingSlot` uses `custom_minimum_size` rather than
+  fixed/absolute positions — so it drops into the existing `SafeArea` /
+  responsive app shell (see the "App shell" section above) without any
+  extra work once something actually places it there.
+
 ## Audio
 
 `AudioManager` (`scripts/core/audio_manager.gd`) is a plumbing-only
@@ -411,3 +470,11 @@ volume is wired to the engine's built-in "Master" bus and reacts live to
   completing every bus in sequence fires `bus_queue_completed`, completed
   buses stay in the queue rather than being removed, and a stale
   `bus_completed` from a non-active bus doesn't advance anything.
+- WaitingArea is verified by `tests/verify_waiting_area.gd`: adding lands
+  in the first empty slot, adding to a full area is rejected outright,
+  a color can be found by its slot index, removing (from the front *and*
+  from the middle) always compacts everything after it left with no gaps,
+  the slot count is resizable both directly and via a real
+  `LevelData.waiting_area.slot_count()`, and `waiting_area_full`/
+  `waiting_area_emptied`/`passenger_added`/`passenger_removed` all fire at
+  exactly the right moments — not one slot early or late.
