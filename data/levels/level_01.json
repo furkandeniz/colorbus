@@ -1,17 +1,20 @@
 {
     "id": 1,
     "name_key": "level.1.name",
-    "waiting_slot_count": 3,
+    "waiting_slot_count": 4,
     "tutorial": true,
     "difficulty": 1,
     "move_limit": 10,
     "buses": [
-        { "color": "red", "capacity": 2 }
+        { "color": "red", "capacity": 2 },
+        { "color": "blue", "capacity": 2 }
     ],
     "passenger_queues": [
         [
             { "color": "red" },
-            { "color": "red" }
+            { "color": "red" },
+            { "color": "blue" },
+            { "color": "blue" }
         ]
     ]
 }

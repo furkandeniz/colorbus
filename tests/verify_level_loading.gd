@@ -126,8 +126,10 @@ func _test_nonexistent_file_controlled_error() -> void:
 
 
 func _test_first_five_levels_are_valid() -> void:
+	const LEVEL_COUNT: int = 20
+
 	var results: Array[LevelLoadResult] = LevelRepository.load_all_levels()
-	_check(results.size() == 5, "exactly 5 sample levels are found under data/levels/")
+	_check(results.size() == LEVEL_COUNT, "exactly %d MVP levels are found under data/levels/" % LEVEL_COUNT)
 
 	var seen_ids: Array[int] = []
 	var seen_difficulties: Array[int] = []
@@ -140,8 +142,12 @@ func _test_first_five_levels_are_valid() -> void:
 			seen_ids.append(result.level.id)
 			seen_difficulties.append(result.level.difficulty)
 
-	_check(seen_ids == [1, 2, 3, 4, 5], "sample level ids are 1 through 5 in order")
-	_check(seen_difficulties == [1, 2, 3, 4, 5], "sample levels increase in difficulty from easy to hard")
+	var expected_ids: Array[int] = []
+	for i: int in range(1, LEVEL_COUNT + 1):
+		expected_ids.append(i)
+
+	_check(seen_ids == expected_ids, "level ids are 1 through %d in order" % LEVEL_COUNT)
+	_check(seen_difficulties == expected_ids, "levels increase in difficulty from easy to hard, one step at a time")
 	if not results.is_empty() and results[0].level != null:
 		_check(results[0].level.tutorial, "level 1 is the tutorial level")
 

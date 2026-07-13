@@ -1,7 +1,7 @@
 extends SceneTree
 ## Integration tests for GameController + GameRules, wired to real Bus/
 ## BusQueue/WaitingArea/PassengerQueue scenes (never mocks), plus an
-## end-to-end check that all 5 sample levels are actually reachable and
+## end-to-end check that all 20 MVP levels are actually reachable and
 ## playable through the real app navigation stack (main.tscn -> MainMenu
 ## -> AppRouter.start_level() -> GameScreen), proving "playable via
 ## MainMenu" rather than just asserting GameController in isolation.
@@ -108,6 +108,10 @@ func _await_settle(controller: GameController) -> void:
 		await process_frame
 
 
+## Level 1 is [red, red, blue, blue] in a single queue against buses
+## red(2) then blue(2) -- a perfectly linear tutorial with zero waiting-area
+## use required: tap 4 times, red completes and blue becomes active exactly
+## when the queue's colors switch, then blue completes on the 4th tap.
 func _test_level_one_full_playthrough_wins() -> void:
 	var result: LevelLoadResult = LevelRepository.load_level_by_id(1)
 	_check(result.is_success(), "level 1 loads for the full-playthrough test")
@@ -124,13 +128,23 @@ func _test_level_one_full_playthrough_wins() -> void:
 
 	_tap_front(queue)
 	await _await_settle(controller)
+	_check(bus_queue.active_bus().color == PassengerColor.Value.RED, "level 1: still on the red bus after the 1st move")
 	_check(bus_queue.active_bus().current_passengers == 1, "level 1: 1st matching passenger boards the active bus")
 	_check(controller.state == GameController.State.PLAYING, "level 1: back to PLAYING after the 1st move")
 
 	_tap_front(queue)
 	await _await_settle(controller)
-	_check(controller.state == GameController.State.WON, "level 1: the level is won once its one bus fills up")
-	_check(controller.moves_made == 2, "level 1: exactly 2 moves were counted")
+	_check(bus_queue.active_bus().color == PassengerColor.Value.BLUE, "level 1: the red bus filling up advances to the blue bus")
+	_check(controller.state == GameController.State.PLAYING, "level 1: still playing once the queue moves on to blue")
+
+	_tap_front(queue)
+	await _await_settle(controller)
+	_check(bus_queue.active_bus().current_passengers == 1, "level 1: 3rd move boards the first blue passenger")
+
+	_tap_front(queue)
+	await _await_settle(controller)
+	_check(controller.state == GameController.State.WON, "level 1: the level is won once the blue bus fills up too")
+	_check(controller.moves_made == 4, "level 1: exactly 4 moves were counted")
 
 	_free_game(game)
 
@@ -276,7 +290,7 @@ func _test_cannot_process_same_passenger_twice() -> void:
 
 ## The end-to-end proof that the first five levels are playable via
 ## MainMenu: boots the real app shell, then drives AppRouter.start_level()
-## (what LevelSelect's buttons call) for each of levels 1-5 and confirms a
+## (what LevelSelect's buttons call) for each of levels 1-20 and confirms a
 ## real GameScreen mounts with a GameController that actually reaches
 ## PLAYING for the right level.
 func _test_all_five_levels_playable_via_app() -> void:
@@ -289,7 +303,7 @@ func _test_all_five_levels_playable_via_app() -> void:
 
 	var app_router: Node = root.get_node("AppRouter")
 
-	for level_id: int in range(1, 6):
+	for level_id: int in range(1, 21):
 		app_router.start_level(level_id)
 		await process_frame
 		await process_frame

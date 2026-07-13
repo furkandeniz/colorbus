@@ -1,0 +1,36 @@
+{
+    "id": 20,
+    "name_key": "level.20.name",
+    "waiting_slot_count": 2,
+    "tutorial": false,
+    "difficulty": 20,
+    "move_limit": 33,
+    "buses": [
+        { "color": "red", "capacity": 3 },
+        { "color": "yellow", "capacity": 2 },
+        { "color": "green", "capacity": 3 },
+        { "color": "purple", "capacity": 2 },
+        { "color": "blue", "capacity": 3 }
+    ],
+    "passenger_queues": [
+        [
+            { "color": "yellow" },
+            { "color": "red" },
+            { "color": "green" },
+            { "color": "blue" }
+        ],
+        [
+            { "color": "green" },
+            { "color": "red" },
+            { "color": "purple" },
+            { "color": "blue" }
+        ],
+        [
+            { "color": "red" },
+            { "color": "green" },
+            { "color": "yellow" },
+            { "color": "blue" },
+            { "color": "purple" }
+        ]
+    ]
+}

@@ -1,29 +1,28 @@
 {
-    "id": 4,
-    "name_key": "level.4.name",
-    "waiting_slot_count": 9,
+    "id": 6,
+    "name_key": "level.6.name",
+    "waiting_slot_count": 10,
     "tutorial": false,
-    "difficulty": 4,
-    "move_limit": 23,
+    "difficulty": 6,
+    "move_limit": 25,
     "buses": [
-        { "color": "red", "capacity": 3 },
-        { "color": "blue", "capacity": 3 },
+        { "color": "red", "capacity": 2 },
+        { "color": "blue", "capacity": 5 },
         { "color": "yellow", "capacity": 3 }
     ],
     "passenger_queues": [
         [
+            { "color": "blue" },
             { "color": "red" },
             { "color": "blue" },
-            { "color": "yellow" }
-        ],
-        [
-            { "color": "blue" },
             { "color": "yellow" },
-            { "color": "red" }
+            { "color": "blue" }
         ],
         [
             { "color": "yellow" },
+            { "color": "blue" },
             { "color": "red" },
+            { "color": "yellow" },
             { "color": "blue" }
         ]
     ]

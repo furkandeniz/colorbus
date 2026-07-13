@@ -57,7 +57,7 @@ func _initialize() -> void:
 		return
 
 	var list: Control = level_select.get_node("%LevelListContainer")
-	_check(list.get_child_count() == 5, "all 5 sample levels are listed")
+	_check(list.get_child_count() == 20, "all 20 MVP levels are listed")
 
 	var button1: Button = _find_button(list, 1)
 	var button2: Button = _find_button(list, 2)
@@ -85,12 +85,12 @@ func _initialize() -> void:
 	_check(controller != null and controller.level.id == 1, "GameScreen opened with the correct level id (1)")
 
 	# Play level 1 to a real WON state through the actual queues, the same
-	# way verify_game_controller.gd's full-playthrough test does.
+	# way verify_game_controller.gd's full-playthrough test does. Level 1 is
+	# [red, red, blue, blue] against buses red(2)/blue(2) -- 4 taps to win.
 	var queue: PassengerQueue = controller._passenger_queues[0]
-	_tap_front(queue)
-	await _await_settle(controller)
-	_tap_front(queue)
-	await _await_settle(controller)
+	for i: int in 4:
+		_tap_front(queue)
+		await _await_settle(controller)
 	_check(controller.state == GameController.State.WON, "level 1 was actually won through real gameplay")
 
 	_check(save.is_level_unlocked(2), "winning level 1 unlocks level 2 immediately (no restart needed)")

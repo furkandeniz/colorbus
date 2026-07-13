@@ -473,10 +473,10 @@ LevelData.from_dict(dict)                       -> LevelLoadResult (level=LevelD
   other four from loading; `load_level_by_id(id)` searches for a specific
   level and returns a `LevelLoadResult` with a descriptive "no level
   defines id N" error (not a crash) if none matches.
-- **The 5 sample levels** (`data/levels/level_01.json` .. `level_05.json`)
-  go easy to hard: 1 color/1 bus (`tutorial: true`) up to all 5 colors
-  across 5 buses and a 6-slot waiting area, `difficulty` 1 through 5 and
-  `move_limit` increasing alongside. Every one is balanced (validated by
+- **The 20 MVP levels** (`data/levels/level_01.json` .. `level_20.json`,
+  `difficulty` 1 through 20) are the shipped content as of Milestone 12 --
+  see that section below for the difficulty-tier design and the BFS
+  solvability guarantee. Every one is balanced (validated by
   `tests/verify_level_loading.gd`, which also intentionally breaks a copy
   of a valid level in four different ways under `user://` to prove each
   rejection path actually rejects, without ever touching the real files).
@@ -763,6 +763,106 @@ persistence for level progress and a few user-facing toggles.
   safe, same as their existing direct `AppRouter`/`PlatformService`
   references.
 
+## Level design and solvability (Milestone 12)
+
+20 MVP levels, replacing the original 5 samples, across 5 difficulty
+tiers of 4 levels each — each tier introduces exactly one new mechanic on
+top of the previous tier's, never several at once:
+
+| Levels | Colors | New mechanic on top of the previous tier |
+| --- | --- | --- |
+| 1-3   | 2 | tutorial/easy baseline, a single queue for level 1 |
+| 4-7   | 3 | multiple queues force real waiting-area use |
+| 8-12  | 4 | a bus color can reappear later in the bus queue (e.g. `[red(2), blue(2), red(1)]`) — the player has to notice a color's bus comes back |
+| 13-16 | 5 | longer queues (5-6 passengers each) at the full color palette |
+| 17-20 | 5 | tight `waiting_slot_count` (2-3, vs. every earlier level's "large enough that overflow is impossible") plus a deliberately non-alphabetical, partly inverted bus/queue color order |
+
+- **No unused colors, ever**: `LevelValidator`'s existing per-color
+  balance rule (a color's total passenger count must equal that color's
+  total bus capacity) already makes an unused color impossible to sneak
+  in by accident — a color present on one side with nothing matching it
+  on the other fails validation outright. Every level's authored color
+  count is exactly its tier's number, not "up to" it.
+- **Deliberately generous waiting area for tiers 1-4**: `waiting_slot_count`
+  is set to that level's total passenger count (or close to it), which
+  makes the waiting area mathematically incapable of ever overflowing —
+  overflow is the *only* way this game can deadlock (see
+  `GameRules.has_any_legal_move()`), so tiers 1-4 are solvable *by
+  construction*, regardless of queue order, and the actual challenge there
+  is purely about recognizing color matches and using the waiting area
+  at all, not about resource-managing it under pressure. Tier 5 (17-20)
+  is the one place waiting is genuinely tight (2-3 slots against 13-14
+  passengers), which is where a real solver stops being optional.
+- **`tools/level_solver.gd` (`LevelSolver`)**: a comprehensive solvability
+  checker, not just a spot-check. It re-models the *exact*
+  `GameController`/`GameRules` mechanics as pure data (no Node/Control
+  touched):
+  - **The key state-space insight**: which branch a move takes (board the
+    active bus directly vs. sit in the waiting area) is *forced* by
+    whether the active bus currently accepts that passenger's color —
+    never a player choice. So the only real decision at any point is
+    *which queue's front to process next*, giving a branching factor equal
+    to the queue count (2-5 here), not some larger space of "board or
+    wait" choices. This is what keeps the search small enough for a plain
+    BFS to be practical.
+  - Abstract state = each queue's remaining colors, the waiting area's
+    color composition, and each not-yet-completed bus's remaining
+    capacity in order. `_apply_move()` mirrors
+    `GameController._on_queue_passenger_selected()` exactly (including
+    rejecting a move that neither matches the active bus nor fits in
+    waiting), and `_run_auto_board_cascade()` mirrors
+    `GameController._run_auto_board_cascade()` exactly (greedily draining
+    every matching waiting passenger before stopping, across as many
+    bus completions as keep matching).
+  - **BFS with a canonical state hash** (`_state_key()`) deduplicates
+    states reached via different move orders, turning what would be an
+    exponential tree of interleavings into a much smaller DAG — and
+    because it's BFS (not DFS), the first time a won state is reached is
+    guaranteed to be via the *shortest* path, so `min_moves` is a true
+    minimum, not just "a" solution's length.
+  - **Bounded, never silently wrong**: `MAX_EXPLORED_STATES` (200,000)
+    caps the search; exhausting it without finding a win *or* proving
+    every reachable state deadlocks is reported as a distinct
+    "inconclusive" result (not solvable, not unsolvable) — a level that
+    hits this is a design smell (too many queues/colors for a clean state
+    space) and fails the check rather than being silently treated as
+    fine. In practice every shipped level explores well under 10,000
+    states.
+  - `_diagnose_deadlock()` gives a human-readable reason for an unsolvable
+    level (which color the stuck active bus needs, which queue fronts are
+    available, and that the waiting area is full) by replaying a greedy
+    "always prefer a direct board" playthrough until it gets stuck — a
+    diagnostic for a human fixing the level, not the proof itself (the
+    BFS above is the actual proof).
+  - Also reports `min_moves` (always exactly equal to the level's total
+    passenger count, for *any* solvable level here — every legal move
+    consumes exactly one passenger and a win requires every queue empty,
+    so this is a structural fact about the game, not a per-level
+    coincidence; it's mainly useful as a sanity check that the solver
+    itself is modeling the rules correctly) and `states_explored`.
+- **`tools/validation/check_level_solvability.gd`** runs `LevelSolver`
+  against every level `LevelRepository` finds and fails the check outright
+  if any level can't even load (a level that can't load can't be
+  solvable), is unsolvable, or is inconclusive.
+  `tools/validation/run_level_solvability.gd` is the `--script` entry
+  point wrapper wired into `tools/validate.sh` as its own step (kept
+  separate from `run_all.gd`'s structural checks since level design is a
+  substantial, distinct concern).
+- **The "analyze the reason, then make a controlled change" workflow**:
+  every one of the 20 shipped levels was hand-designed with the solver's
+  exact mechanics in mind (a "sorted by bus order" construction proves
+  solvability by hand for tiers 1-4's generous-waiting levels; tier 5's
+  tight-waiting levels were built from that same sorted base, then mildly
+  "inverted" in a couple of spots for real difficulty, single moves at a
+  time) and passed `LevelSolver` on the first run — so there was no
+  actual unsolvable level to repair this round. The check is permanently
+  wired into `tools/validate.sh`, though, so any *future* level edit that
+  breaks solvability fails the build immediately, with
+  `_diagnose_deadlock()`'s reason pointing at exactly which color/queue/
+  waiting-capacity to adjust — analyze that reason, make one targeted
+  change (loosen a color's queue position, add a waiting slot, or reorder
+  a bus), and re-run, rather than regenerating a level from scratch.
+
 ## Testing
 
 - `tests/` holds a dependency-free GDScript test runner for pure-logic code
@@ -828,19 +928,21 @@ persistence for level progress and a few user-facing toggles.
   with an error naming both that field and the source file, an unknown
   color is rejected, a total-passenger/total-capacity mismatch is
   rejected, loading a file that doesn't exist fails gracefully (not a
-  crash), and all 5 real sample levels under `data/levels/` load and
+  crash), and all 20 real MVP levels under `data/levels/` load and
   validate, in id order, with strictly increasing difficulty. The broken-
   level cases write temporary files under `user://test_levels/` (cleaned
   up afterward) rather than ever touching the real `data/levels/` files.
 - GameController/GameRules are verified by `tests/verify_game_controller.gd`:
-  a full level-1 playthrough reaching `WON`; a mismatched color routing to
-  the waiting area instead of boarding; FIFO auto-boarding on an
+  a full level-1 playthrough reaching `WON` (level 1 is `[red, red, blue,
+  blue]` against buses `red(2)` then `blue(2)` — 4 taps, with the active
+  bus advancing from red to blue partway through); a mismatched color
+  routing to the waiting area instead of boarding; FIFO auto-boarding on an
   active-bus change (including one where the auto-board itself wins the
   level); a rejected move that does *not* end the game while a legal move
   exists elsewhere, vs. a *successful* move that reveals a genuine
   deadlock; that a passenger can't be processed twice from two
   back-to-back taps; and — the actual "playable via MainMenu" proof — all
-  5 sample levels reaching `PLAYING` through the real
+  20 MVP levels reaching `PLAYING` through the real
   `main.tscn` -> `AppRouter.start_level()` -> `GameScreen` stack, not just
   `GameController` exercised in isolation. Real click/tap simulation isn't
   possible headlessly (see the Input section above), so "tapping" calls
@@ -875,15 +977,24 @@ persistence for level progress and a few user-facing toggles.
   afterward, the same spirit as `verify_level_loading.gd`'s temp-file
   approach, just necessarily against the real path since that *is* the
   thing being tested.
-- LevelSelect is verified by `tests/verify_level_select.gd`: all 5 sample
+- LevelSelect is verified by `tests/verify_level_select.gd`: all 20 MVP
   levels are listed; a locked level renders a disabled `Button` and a
   `"level.locked"` status label instead of a star count; tapping an
   unlocked level's real `Button.pressed` signal (not a direct method call)
   opens `GameScreen` with the correct level id; winning that level through
-  actual gameplay (the same tap-front-twice flow as
-  `verify_game_controller.gd`'s level-1 test) unlocks the next level
-  immediately; and progress survives a simulated app restart —
-  `SaveManager.load_data()` re-reading `save.json` from disk exactly like
-  a cold launch would, followed by rebuilding LevelSelect and confirming
-  the unlock and star count are still there. Also backs up/restores the
-  real `save.json`, same as `verify_save_manager.gd`.
+  actual gameplay (the same 4-tap flow as `verify_game_controller.gd`'s
+  level-1 test) unlocks the next level immediately; and progress survives
+  a simulated app restart — `SaveManager.load_data()` re-reading
+  `save.json` from disk exactly like a cold launch would, followed by
+  rebuilding LevelSelect and confirming the unlock and star count are
+  still there. Also backs up/restores the real `save.json`, same as
+  `verify_save_manager.gd`.
+- The Milestone 12 level design is verified by
+  `tools/validation/check_level_solvability.gd` (wired into
+  `tools/validate.sh` via `run_level_solvability.gd`, not under `tests/`
+  since it checks level *data* the same way `CheckJson`/
+  `CheckResourcePaths` check other project data, rather than exercising a
+  Node/scene): `LevelSolver.solve()` against every level under
+  `data/levels/`, requiring `solvable == true` for every one (and failing
+  outright, with the reason, for any that's unsolvable, inconclusive, or
+  can't even load).

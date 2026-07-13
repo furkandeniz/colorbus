@@ -1,0 +1,34 @@
+{
+    "id": 9,
+    "name_key": "level.9.name",
+    "waiting_slot_count": 10,
+    "tutorial": false,
+    "difficulty": 9,
+    "move_limit": 25,
+    "buses": [
+        { "color": "blue", "capacity": 2 },
+        { "color": "red", "capacity": 2 },
+        { "color": "green", "capacity": 2 },
+        { "color": "yellow", "capacity": 2 },
+        { "color": "blue", "capacity": 1 },
+        { "color": "red", "capacity": 1 }
+    ],
+    "passenger_queues": [
+        [
+            { "color": "blue" },
+            { "color": "red" },
+            { "color": "green" },
+            { "color": "yellow" }
+        ],
+        [
+            { "color": "red" },
+            { "color": "blue" },
+            { "color": "yellow" },
+            { "color": "green" }
+        ],
+        [
+            { "color": "blue" },
+            { "color": "red" }
+        ]
+    ]
+}

@@ -5,6 +5,26 @@ single GDScript codebase shared by Android and iOS.
 
 ## Status
 
+Milestone 12: 20 MVP levels, controlled-designed (not random) across 5
+difficulty tiers -- two colors (1-3), three colors + waiting area (4-7),
+four colors + a more complex, repeated-color bus queue (8-12), five colors
++ longer queues (13-16), and five colors with a tight waiting area +
+adversarially-ordered bus queue (17-20). Every level's total passenger
+count and per-color passenger count exactly match total/per-color bus
+capacity (`LevelValidator`'s existing balance rule), so no level has an
+unused color. `tools/level_solver.gd` (`LevelSolver`) is a real
+solvability checker: it models the exact `GameController`/`GameRules`
+mechanics as pure data and searches every reachable game state via BFS
+(deduplicated by a canonical state hash, bounded by
+`MAX_EXPLORED_STATES` so a pathological level can never hang the search),
+reporting whether at least one winning move sequence exists and, if so,
+the true minimum move count. `tools/validation/check_level_solvability.gd`
+runs it against every level under `data/levels/` and is wired into
+`tools/validate.sh` as its own gating step -- all 20 shipped levels are
+BFS-proven solvable. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for
+the state model and why "which queue to tap next" is the only real
+decision the solver has to search over.
+
 Milestone 11: local save and level progression. `SaveManager`
 (`scripts/data/save_manager.gd`) persists `user://save.json`: which level is
 the furthest unlocked, which are completed and their best star rating
@@ -87,7 +107,7 @@ pure-data layer.
 
 ```
 assets/            art, audio, fonts (by category)
-data/levels/        JSON level definitions (5 sample levels, easy to hard)
+data/levels/        JSON level definitions (20 MVP levels, easy to hard)
 docs/                architecture and process docs
 exports/             local export output (git-ignored)
 scenes/app/          root/app-shell scenes
@@ -110,6 +130,7 @@ scripts/game/        PassengerQueueData, GameState(Snapshot), PassengerQueue,
 scripts/platform/    PlatformService and platform-specific code
 scripts/ui/          UI scripts (MainMenu, app shell, LevelSelect)
 tests/               dependency-free GDScript test runner
+tools/level_solver.gd  LevelSolver: BFS-based level solvability checker
 tools/validation/    automated project validation checks
 ```
 
@@ -165,13 +186,13 @@ This runs, in order:
 15. Level loading/validation checks -- a valid level loads, a missing
     field/unknown color/capacity mismatch are each rejected with a
     descriptive error, a nonexistent file fails gracefully (not a crash),
-    and all 5 sample levels load and validate
-    (`tests/verify_level_loading.gd`)
+    and all 20 MVP levels load and validate, strictly increasing in
+    difficulty (`tests/verify_level_loading.gd`)
 16. GameController integration checks -- a full level playthrough reaching
     WON, mismatched-color routing to the waiting area, FIFO auto-boarding
     on an active-bus change (including one that wins the level), a
     rejected move that doesn't end the game vs. one that reveals a real
-    deadlock, double-tap protection, and all 5 sample levels reaching
+    deadlock, double-tap protection, and all 20 MVP levels reaching
     PLAYING through the real MainMenu -> LevelSelect -> AppRouter stack
     (`tests/verify_game_controller.gd`)
 17. Gameplay animation checks -- `AnimationConfig.duration()` honors
@@ -190,13 +211,18 @@ This runs, in order:
     next one, a worse replay never downgrading an earlier best star
     result, and music/sound/vibration toggles surviving a reload
     (`tests/verify_save_manager.gd`)
-19. LevelSelect checks -- all 5 sample levels are listed, a locked level
+19. LevelSelect checks -- all 20 MVP levels are listed, a locked level
     shows a disabled button with no star count, tapping an unlocked
     level's real `Button.pressed` signal opens `GameScreen` with the
     correct level id, winning that level through real gameplay unlocks the
     next one immediately, and progress (unlock state and stars) survives a
     simulated app restart (`SaveManager.load_data()` re-reading
     `save.json` from disk) (`tests/verify_level_select.gd`)
+20. Level solvability checks -- `LevelSolver`'s BFS search runs against
+    every level under `data/levels/` and confirms all 20 MVP levels are
+    solvable, reporting the true minimum move count for each
+    (`tools/validation/run_level_solvability.gd`, wrapping
+    `tools/validation/check_level_solvability.gd`)
 
 Exits 0 only if every step above passes except the informational unused-
 script report. See `tools/validation/` for the individual checks and
