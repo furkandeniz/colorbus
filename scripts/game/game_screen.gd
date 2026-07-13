@@ -24,8 +24,12 @@ const PassengerQueueScene: PackedScene = preload("res://scenes/game/passenger_qu
 @onready var _win_menu_button: Button = %WinMenuButton
 @onready var _lose_retry_button: Button = %LoseRetryButton
 @onready var _lose_menu_button: Button = %LoseMenuButton
+@onready var _animation_layer: Control = %AnimationLayer
+@onready var _win_panel: Control = _win_popup.get_node("Center/Panel")
+@onready var _lose_panel: Control = _lose_popup.get_node("Center/Panel")
 
 var controller: GameController = null
+var _animator: GameAnimator = null
 
 
 func _ready() -> void:
@@ -78,15 +82,24 @@ func _load_and_start(level_id: int) -> void:
 		_passenger_queues_container.add_child(queue)
 		passenger_queues.append(queue)
 
-	controller = GameController.new(result.level, bus_queue, waiting_area, passenger_queues)
+	_animator = GameAnimator.new(_animation_layer)
+	controller = GameController.new(result.level, bus_queue, waiting_area, passenger_queues, _animator)
 	controller.state_changed.connect(_on_state_changed)
 	_level_info_label.text = result.level.name_key
 	controller.start()
 
 
 func _on_state_changed(state: GameController.State) -> void:
-	_win_popup.visible = state == GameController.State.WON
-	_lose_popup.visible = state == GameController.State.LOST
+	if state == GameController.State.WON:
+		_animator.animate_popup_entrance(_win_popup, _win_panel)
+	else:
+		_win_popup.visible = false
+
+	if state == GameController.State.LOST:
+		_animator.animate_popup_entrance(_lose_popup, _lose_panel)
+	else:
+		_lose_popup.visible = false
+
 	_pause_button.disabled = state == GameController.State.WON or state == GameController.State.LOST
 
 

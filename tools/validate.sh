@@ -6,8 +6,9 @@
 # phone resolutions, an app-navigation check, a typed-data-model check, a
 # Passenger scene check, a PassengerQueue scene check, a Bus scene check, a
 # BusQueue scene check, a WaitingArea scene check, a level
-# loading/validation check, and a GameController integration check. Exits
-# 0 only if every gating check passes.
+# loading/validation check, a GameController integration check, and a
+# gameplay-animation infrastructure check. Exits 0 only if every gating
+# check passes.
 set -uo pipefail
 
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -42,6 +43,14 @@ run_step() {
         echo "FAIL: engine-level crash detected in $label"
         exit 1
     fi
+    if grep -qE "Failed to load script|Compilation failed" "$log_file"; then
+        echo "FAIL: $label failed to compile -- its checks never ran (see output above)"
+        exit 1
+    fi
+    if ! grep -qE "RESULT: PASS|Overall: *PASS" "$log_file"; then
+        echo "FAIL: $label produced no passing result marker -- its checks may not have run at all (see output above)"
+        exit 1
+    fi
     if [ $status -ne 0 ]; then
         echo "FAIL: $label failed (see output above)"
         exit 1
@@ -52,7 +61,7 @@ echo "== Color Bus: Validate Project =="
 echo "Godot: $("$GODOT_BIN" --version)"
 echo
 
-echo "-- Step 1/12: headless import --"
+echo "-- Step 1/13: headless import --"
 IMPORT_LOG="$LOG_DIR/import.log"
 "$GODOT_BIN" --headless --path . --import >"$IMPORT_LOG" 2>&1
 import_status=$?
@@ -65,38 +74,41 @@ fi
 echo "Import: OK"
 echo
 
-echo "Step 2/12:"
+echo "Step 2/13:"
 run_step "script parse / JSON / resource-path / boot checks" "res://tools/validation/run_all.gd"
 
-echo "Step 3/12:"
+echo "Step 3/13:"
 run_step "responsive layout check (5 phone resolutions)" "res://tests/verify_responsive_layout.gd"
 
-echo "Step 4/12:"
+echo "Step 4/13:"
 run_step "app navigation check (MainMenu/LevelSelect/Settings/back)" "res://tests/verify_navigation.gd"
 
-echo "Step 5/12:"
+echo "Step 5/13:"
 run_step "typed data model checks" "res://tests/verify_data_models.gd"
 
-echo "Step 6/12:"
+echo "Step 6/13:"
 run_step "Passenger scene checks (5 colors, selectable/disabled/moving)" "res://tests/verify_passenger.gd"
 
-echo "Step 7/12:"
+echo "Step 7/13:"
 run_step "PassengerQueue checks (front-only selection, advance, queue_emptied)" "res://tests/verify_passenger_queue.gd"
 
-echo "Step 8/12:"
+echo "Step 8/13:"
 run_step "Bus checks (color match, capacity, completion)" "res://tests/verify_bus.gd"
 
-echo "Step 9/12:"
+echo "Step 9/13:"
 run_step "BusQueue checks (active bus advance, bus_queue_completed)" "res://tests/verify_bus_queue.gd"
 
-echo "Step 10/12:"
+echo "Step 10/13:"
 run_step "WaitingArea checks (first-empty-slot, full/empty, compaction, dynamic size)" "res://tests/verify_waiting_area.gd"
 
-echo "Step 11/12:"
+echo "Step 11/13:"
 run_step "Level loading/validation checks (LevelLoader/LevelValidator/LevelRepository, 5 sample levels)" "res://tests/verify_level_loading.gd"
 
-echo "Step 12/12:"
+echo "Step 12/13:"
 run_step "GameController integration checks (full playthrough, auto-board, deadlock, all 5 levels playable via MainMenu)" "res://tests/verify_game_controller.gd"
+
+echo "Step 13/13:"
+run_step "Gameplay animation checks (reduce-motion scaling, animation lock, timeout safety, flight landing, rejected feedback)" "res://tests/verify_game_animations.gd"
 
 echo "PASS: all checks passed"
 exit 0

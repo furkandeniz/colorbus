@@ -91,6 +91,47 @@ func _on_remove_finished(passenger: Passenger) -> void:
 		queue_emptied.emit()
 
 
+## Like remove_front(), but hands back the live front Passenger instead of
+## fading+freeing it -- for callers that want to animate it externally
+## (flying to a bus) before disposing of it. Locks the queue immediately
+## (same as remove_front()) so the same passenger can't be re-selected
+## mid-flight; the caller MUST eventually call finish_external_removal()
+## once the external animation completes, or the queue stays locked
+## forever. A no-op (returns null) under the same conditions remove_front()
+## ignores: already locked, empty, or already-removed front.
+func take_front() -> Passenger:
+	if _is_locked:
+		return null
+	var passenger: Passenger = front()
+	if passenger == null or _removed_passengers.has(passenger):
+		return null
+
+	_removed_passengers[passenger] = true
+	_is_locked = true
+	_refresh_selectable()
+
+	_passengers.erase(passenger)
+	remove_child(passenger)
+	if passenger.passenger_selected.is_connected(_on_passenger_selected):
+		passenger.passenger_selected.disconnect(_on_passenger_selected)
+
+	return passenger
+
+
+## Completes a take_front() started earlier: unlocks the queue and emits
+## passenger_removed/queue_emptied, exactly like _on_remove_finished() does
+## for remove_front() -- for parity between the two removal paths. The
+## caller owns freeing the detached passenger node itself.
+func finish_external_removal(color: int) -> void:
+	_is_locked = false
+	_refresh_selectable()
+
+	passenger_removed.emit(color)
+
+	if _passengers.is_empty():
+		queue_emptied.emit()
+
+
 func _clear() -> void:
 	for passenger: Passenger in _passengers:
 		if passenger.passenger_selected.is_connected(_on_passenger_selected):

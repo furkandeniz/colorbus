@@ -501,7 +501,8 @@ GameScreen._ready()
   → LevelRepository.load_level_by_id(pending_level_id)
   → builds empty BusQueue/WaitingArea/PassengerQueue×N view nodes
       (GameController never instantiates a scene itself)
-  → GameController.new(level, bus_queue, waiting_area, passenger_queues)
+  → GameAnimator.new(%AnimationLayer)
+  → GameController.new(level, bus_queue, waiting_area, passenger_queues, animator)
   → controller.start()
 ```
 
@@ -520,18 +521,17 @@ GameScreen._ready()
   and `Passenger`'s own `selectable` flag).
 - **Routing a selected passenger**: if the active bus `can_accept()` its
   color, it boards the bus; otherwise, if the waiting area has room, it
-  goes there; otherwise the move is **rejected** — `queue.remove_front()`
+  goes there; otherwise the move is **rejected** — `queue.take_front()`
   only ever runs for an accepted move, so a rejected passenger stays
-  exactly where it was. `await queue.passenger_removed` (a signal added to
-  `PassengerQueue` for this — it previously only had `queue_emptied`, the
-  special case of the *last* passenger) is what lets `GameController` wait
-  for the fade-out animation before actually boarding/waiting the
-  passenger and returning to `PLAYING`.
-- **Auto-boarding**: `GameController` connects to
-  `BusQueue.active_bus_changed`; whenever a new bus becomes active,
-  `GameRules.auto_board_from_waiting_area()` boards every matching waiting
-  passenger in FIFO order (`WaitingArea.find_first_slot_of_color()` always
-  returns the earliest-added match) before anything else happens.
+  exactly where it was. See "Milestone 10" below for how the actual flight
+  is awaited before `board_passenger()`/`add_passenger()` runs.
+- **Auto-boarding**: as of Milestone 10 this is an explicit, awaited
+  `_run_auto_board_cascade()` called directly by `start()` and by
+  `_on_queue_passenger_selected()` after every player move (**not** a
+  `BusQueue.active_bus_changed` signal handler any more — see below for
+  why). It boards every matching waiting passenger in FIFO order
+  (`WaitingArea.find_first_slot_of_color()` always returns the
+  earliest-added match) before anything else happens.
 - **Win**: `GameRules.is_level_won()` is just `bus_queue.active_bus() ==
   null` — sufficient on its own given `LevelValidator` guarantees total
   passengers equals total bus capacity, so every passenger must already be
@@ -571,14 +571,109 @@ GameScreen._ready()
   line per state transition) everywhere else, including every headless
   test run.
 
+## Animation (Milestone 10)
+
+Every gameplay animation (passenger flights, waiting-area compaction, bus
+entrance/celebration/exit, rejected-tap feedback, win/lose popup entrance)
+was added without changing any existing rule — `GameRules`'s three
+functions and every state transition in `GameController` are unchanged in
+*meaning*, only in *when* they run relative to a Tween.
+
+- **Container-vs-animation conflict**: Godot Containers
+  (`PassengerQueue`'s `VBoxContainer`, `BusQueue`/`WaitingArea`'s
+  `HBoxContainer`) overwrite a child's `position`/`size` every layout
+  pass, so animating `position` directly on a child of a Container
+  silently does nothing (the container resets it next frame). Properties
+  that are always safe regardless of Container parent: `rotation`,
+  `scale`, `modulate`, `custom_minimum_size`, `pivot_offset` — these drive
+  every *in-place* animation (`Passenger.play_rejected_feedback()`'s
+  rotation shake, `Bus._play_entrance_animation()`/
+  `_play_completion_celebration()`'s scale pulse and fade+shrink exit).
+  `WaitingSlot` is *not* itself a Container, so `Passenger.
+  play_slide_in_from_right()` (the compaction slide) can animate local
+  `position` directly.
+- **Cross-parent flight via an overlay layer**: any animation that has to
+  visually cross between locations (queue → bus, queue → waiting slot,
+  waiting slot → bus) reparents the passenger onto `GameScreen`'s
+  `%AnimationLayer` (a plain full-rect `Control`, `mouse_filter = IGNORE`,
+  not a Container) first, preserving `global_position` across the
+  reparent, then tweens `global_position` freely. `GameAnimator`
+  (`scripts/game/game_animator.gd`, never Autoload — one instance per
+  `GameScreen`, constructed alongside `GameController`) owns this:
+  `fly_passenger_to(passenger, target, base_duration)`.
+- **Take/animate/finish pattern**: rather than a view component instantly
+  freeing a removed node internally, each gained a "take" variant that
+  detaches the live node *without* freeing it and *locks* immediately —
+  `PassengerQueue.take_front()` (paired with `finish_external_removal()`
+  once the flight lands) and `WaitingArea.take_passenger_at()` (already
+  synchronous/self-contained, since only the *visual* removal is
+  deferred). The lock is what satisfies "the same passenger must not be
+  re-selectable during animation": `take_front()` sets `_is_locked = true`
+  and calls `_refresh_selectable()` *before* detaching anything, so even
+  the newly-promoted front passenger isn't selectable until
+  `finish_external_removal()` runs.
+- **Sequencing rule**: `board_passenger()`/`add_passenger()` (the actual
+  game-state mutation) only ever runs *after* `await
+  _animator.fly_passenger_to(...)` resolves — never before — which is
+  what satisfies "game state must not update incorrectly before animation
+  completes". The routing-to-waiting-area path additionally hides the
+  real destination `Passenger` (`modulate.a = 0`) the instant
+  `WaitingArea.add_passenger()` creates it, since that call is
+  synchronous and would otherwise show a visible duplicate next to the
+  still-flying one; it's revealed once the flight lands.
+- **Auto-board is no longer signal-driven**: Milestone 9's
+  `_on_active_bus_changed()` (connected to `BusQueue.active_bus_changed`)
+  ran the whole auto-board pass *synchronously inside* whatever call
+  completed a bus, which made it impossible to `await` a flight per
+  passenger without racing the signal cascade. It's now
+  `_run_auto_board_cascade()`, an explicit loop called with `await`
+  directly by `start()` and by `_on_queue_passenger_selected()` — same
+  FIFO rule, same trigger points, just genuinely awaitable.
+- **Timeout-safe tween awaiting**: `GameAnimator._await_tween()` races
+  `tween.finished` against a `SceneTreeTimer.timeout` (duration + 0.5s
+  margin) using a shared one-element `Array[bool]` flag, so a Tween that
+  never fires `finished` for any reason (a killed tween, a freed target)
+  can't hang the awaiting coroutine forever — the concrete mechanism
+  behind "an animation failure must not lock the game". Verified directly
+  in `tests/verify_game_animations.gd` by `kill()`-ing a tween before it
+  can finish and confirming the await still resolves.
+- **Reduce motion**: `SettingsManager.reduce_motion` (persisted, no
+  settings-panel UI yet — `settings_panel.tscn` is still a placeholder)
+  scales every duration via `AnimationConfig.duration()` down by
+  `REDUCE_MOTION_SCALE` (0.15, not zero — the Tween still needs to
+  actually finish and fire `finished`). `AnimationConfig`
+  (`scripts/game/animation_config.gd`) is the single place every
+  animation's base duration lives.
+- **No particle systems anywhere**: every animation is a plain property
+  `Tween` (position/scale/rotation/modulate) — satisfies "don't use
+  excessive particles on low-performance devices" by construction, not by
+  a runtime toggle. `tests/verify_game_animations.gd` statically greps the
+  animation-related scripts to keep it that way.
+- **A genuinely nasty Godot gotcha found here**: referencing an Autoload
+  singleton by its bare name (`SettingsManager.reduce_motion`,
+  `AudioManager.play_sfx(...)`) anywhere in a `class_name` script's
+  source — or in a `--script` entry point — corrupts that class's
+  compiled form for the rest of the headless process, and does **not**
+  self-heal with a fresh `--import` (unlike the already-documented
+  "brand-new class needs an import" gotcha). `AnimationConfig.
+  _reduce_motion()` and `GameController._play_sfx()` work around it by
+  reaching the singleton via `Engine.get_main_loop().root.
+  get_node_or_null("/root/Name")` (a NodePath *string*, not a bare
+  identifier) plus `.get()`/`.set()`/`.call()`. See
+  [CLAUDE.md](../CLAUDE.md) for the full writeup.
+
 ## Audio
 
 `AudioManager` (`scripts/core/audio_manager.gd`) is a plumbing-only
 foundation: `register_sfx()`/`register_music()` associate a key with an
 `AudioStream`, and `play_sfx()`/`play_music()` no-op safely if nothing is
 registered under that key. No audio assets exist yet
-(`assets/audio/` is empty), so nothing plays yet — that's expected. Master
-volume is wired to the engine's built-in "Master" bus and reacts live to
+(`assets/audio/` is empty), so nothing actually plays yet — that's
+expected. `GameController` already calls `play_sfx()` at the real trigger
+points (`"passenger_board_bus"`, `"passenger_to_waiting"`) added in
+Milestone 10, so wiring up real `AudioStream`s later is just
+`register_sfx()` calls, no further code changes. Master volume is wired to
+the engine's built-in "Master" bus and reacts live to
 `SettingsManager.settings_changed`.
 
 ## Testing
@@ -662,4 +757,20 @@ volume is wired to the engine's built-in "Master" bus and reacts live to
   `main.tscn` -> `AppRouter.start_level()` -> `GameScreen` stack, not just
   `GameController` exercised in isolation. Real click/tap simulation isn't
   possible headlessly (see the Input section above), so "tapping" calls
-  `Passenger._on_pressed()` directly, same as every other test here.
+  `Passenger._on_pressed()` directly, same as every other test here. Since
+  Milestone 10 every move now runs a real, awaited `GameAnimator` flight
+  instead of an instant fade, so this test's `_await_settle()` helper polls
+  until `GameController.state` actually leaves `MOVING_PASSENGER` (bounded
+  by `MAX_SETTLE_FRAMES`) rather than waiting a guessed fixed delay.
+- The Milestone 10 animation infrastructure is verified by
+  `tests/verify_game_animations.gd`: `AnimationConfig.duration()` honors
+  `SettingsManager.reduce_motion`; `PassengerQueue.take_front()` locks the
+  whole queue immediately (not just the one passenger) so nothing —
+  including the newly-promoted front — is re-selectable until
+  `finish_external_removal()` runs; `GameAnimator._await_tween()`'s
+  timeout safety net resolves even when a `Tween` is `kill()`-ed before it
+  ever fires `finished`; a real `fly_passenger_to()` flight lands on its
+  target's center and reparents onto the overlay animation layer; an
+  unselectable tap's `play_rejected_feedback()` shake animates rotation
+  without ever emitting `passenger_selected`; and a static grep confirms
+  no gameplay script reaches for a particle system.

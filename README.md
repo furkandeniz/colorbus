@@ -5,6 +5,24 @@ single GDScript codebase shared by Android and iOS.
 
 ## Status
 
+Milestone 10: the game animates. Every passenger move (queue -> bus, queue
+-> waiting slot, waiting slot -> bus via auto-board), waiting-area
+compaction, a bus filling up and exiting, a new bus arriving, a rejected
+tap, and the win/lose popups all have real Godot `Tween`-driven animation,
+without changing any existing rule. `GameAnimator`
+(`scripts/game/game_animator.gd`, never Autoload -- constructed once per
+`GameScreen` alongside `GameController`) owns every cross-location "flying"
+passenger animation via a take/animate/finish pattern (`PassengerQueue.
+take_front()`/`finish_external_removal()`, `WaitingArea.take_passenger_at()`)
+so a passenger mid-flight can never be re-selected and game state never
+advances before its animation actually finishes. `AnimationConfig`
+(`scripts/game/animation_config.gd`) centralizes every duration and honors
+`SettingsManager.reduce_motion` (persisted, no UI toggle yet). Every
+animation is a plain property `Tween` (position/scale/rotation/modulate) --
+no particle systems anywhere. See
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the animation
+architecture and a genuinely nasty Godot gotcha it uncovered.
+
 Milestone 9: the game actually plays. `GameScreen`/`GameController` (never
 Autoload -- owned solely by the GameScreen instance) wire together
 everything from Milestones 3-8: a level loads, buses/queues/the waiting
@@ -69,7 +87,7 @@ scripts/entities/    PassengerData, BusData (data) + Passenger, Bus,
                      WaitingSlot (views)
 scripts/game/        PassengerQueueData, GameState(Snapshot), PassengerQueue,
                      BusQueue, WaitingArea, GameController, GameRules,
-                     GameScreen
+                     GameAnimator, AnimationConfig, GameScreen
 scripts/platform/    PlatformService and platform-specific code
 scripts/ui/          UI scripts (MainMenu, app shell, LevelSelect)
 tests/               dependency-free GDScript test runner
@@ -137,6 +155,15 @@ This runs, in order:
     deadlock, double-tap protection, and all 5 sample levels reaching
     PLAYING through the real MainMenu -> LevelSelect -> AppRouter stack
     (`tests/verify_game_controller.gd`)
+17. Gameplay animation checks -- `AnimationConfig.duration()` honors
+    `SettingsManager.reduce_motion`, `PassengerQueue.take_front()` locks
+    the queue so nothing is re-selectable mid-flight until
+    `finish_external_removal()`, `GameAnimator`'s timeout safety net
+    resolves a `Tween` that never fires `finished`, a real
+    `fly_passenger_to()` flight lands on its target and reparents onto the
+    overlay animation layer, an unselectable tap's rejected-feedback shake
+    plays without emitting selection, and no gameplay animation touches a
+    particle system (`tests/verify_game_animations.gd`)
 
 Exits 0 only if every step above passes except the informational unused-
 script report. See `tools/validation/` for the individual checks and

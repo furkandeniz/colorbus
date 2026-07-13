@@ -47,6 +47,19 @@ func clear() -> void:
 	_update_outline()
 
 
+## Like clear(), but hands back the live Passenger instead of freeing it --
+## used when the caller wants to animate it (flying to a bus, say) before
+## it's actually disposed of.
+func take_passenger() -> Passenger:
+	if _passenger == null:
+		return null
+	var passenger: Passenger = _passenger
+	remove_child(passenger)
+	_passenger = null
+	_update_outline()
+	return passenger
+
+
 func _update_outline() -> void:
 	if not is_node_ready():
 		return

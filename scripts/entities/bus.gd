@@ -26,6 +26,7 @@ var is_completed: bool = false
 
 
 func _ready() -> void:
+	pivot_offset = size / 2.0
 	_update_visual()
 
 
@@ -41,8 +42,11 @@ func configure(p_color: int, p_capacity: int) -> void:
 
 
 func set_active(p_active: bool) -> void:
+	var was_active: bool = is_active
 	is_active = p_active
 	_update_visual()
+	if p_active and not was_active:
+		_play_entrance_animation()
 
 
 ## Whether this bus would currently accept a passenger of p_color: active,
@@ -73,9 +77,45 @@ func board_passenger(p_color: int) -> bool:
 	if current_passengers >= capacity:
 		is_completed = true
 		bus_completed.emit(self)
+		_update_visual()
+		_play_completion_celebration()
+		return true
 
 	_update_visual()
 	return true
+
+
+## A new bus becoming active gets a brief scale bounce -- purely cosmetic,
+## self-contained (Bus reacts to its own state change; nothing external
+## needs to await this). Uses scale, never position -- BusQueue is a
+## Container (HBoxContainer) that would silently override a position tween
+## every frame.
+func _play_entrance_animation() -> void:
+	scale = Vector2(0.8, 0.8)
+	var duration: float = AnimationConfig.duration(AnimationConfig.BUS_ENTRANCE)
+	var tween: Tween = create_tween()
+	tween.tween_property(self, "scale", Vector2.ONE, duration).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+## A short "pop" celebration once the bus fills up, then a fade+shrink
+## exit -- purely visual. The bus itself is never removed from BusQueue's
+## _buses array or the scene tree (completed buses stay in place, per
+## docs/ARCHITECTURE.md) -- this only ever touches scale/modulate/
+## custom_minimum_size, so BusQueue's layout naturally reclaims the space
+## once shrunk to zero, without any node ever being freed or the "don't
+## remove completed buses" rule changing at all.
+func _play_completion_celebration() -> void:
+	var celebration_duration: float = AnimationConfig.duration(AnimationConfig.BUS_CELEBRATION)
+	var exit_duration: float = AnimationConfig.duration(AnimationConfig.BUS_EXIT)
+
+	var tween: Tween = create_tween()
+	tween.tween_property(self, "scale", Vector2(1.15, 1.15), celebration_duration * 0.5).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tween.tween_property(self, "scale", Vector2.ONE, celebration_duration * 0.5).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+
+	tween.set_parallel(true)
+	tween.tween_property(self, "modulate:a", 0.0, exit_duration)
+	tween.tween_property(self, "scale", Vector2.ZERO, exit_duration)
+	tween.tween_property(self, "custom_minimum_size", Vector2.ZERO, exit_duration)
 
 
 ## The only place appearance is computed/applied. configure()/set_active()

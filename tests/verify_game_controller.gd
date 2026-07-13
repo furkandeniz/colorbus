@@ -10,9 +10,17 @@ extends SceneTree
 ## docs/ARCHITECTURE.md) -- "tapping" a passenger calls its private
 ## _on_pressed() directly, same pattern as every other test here.
 ##
+## Every move now runs a real, awaited GameAnimator flight rather than an
+## instant fade, so tests wait for GameController.state to actually leave
+## MOVING_PASSENGER (_await_settle()) instead of a guessed fixed delay --
+## robust regardless of how long any single animation actually takes.
+##
 ## Usage: godot --headless --path . --script res://tests/verify_game_controller.gd
 
-const REMOVE_WAIT: float = 0.4
+## Safety ceiling for _await_settle() below -- real gameplay animations
+## never take this long; it only exists so a genuine bug (state stuck in
+## MOVING_PASSENGER) fails the test instead of hanging the runner forever.
+const MAX_SETTLE_FRAMES: int = 600
 
 var _all_ok: bool = true
 
@@ -36,11 +44,11 @@ func _check(condition: bool, label: String) -> void:
 	print("[GameControllerTest] %s -> %s" % [label, "OK" if condition else "FAIL"])
 
 
-## Builds fresh, empty BusQueue/WaitingArea/PassengerQueue view nodes (one
-## queue per level.passenger_queues entry) and a GameController wired to
-## them, mirroring exactly what GameScreen does -- without going through
-## the screen/AppRouter navigation stack, so scenarios can be constructed
-## directly.
+## Builds fresh, empty BusQueue/WaitingArea/PassengerQueue/AnimationLayer
+## view nodes (one queue per level.passenger_queues entry) and a
+## GameController wired to them, mirroring exactly what GameScreen does --
+## without going through the screen/AppRouter navigation stack, so
+## scenarios can be constructed directly.
 func _make_game(level: LevelData) -> Dictionary:
 	var bus_queue: BusQueue = load("res://scenes/game/bus_queue.tscn").instantiate()
 	root.add_child(bus_queue)
@@ -54,9 +62,13 @@ func _make_game(level: LevelData) -> Dictionary:
 		root.add_child(queue)
 		passenger_queues.append(queue)
 
+	var animation_layer: Control = Control.new()
+	root.add_child(animation_layer)
+
 	await process_frame
 
-	var controller: GameController = GameController.new(level, bus_queue, waiting_area, passenger_queues)
+	var animator: GameAnimator = GameAnimator.new(animation_layer)
+	var controller: GameController = GameController.new(level, bus_queue, waiting_area, passenger_queues, animator)
 	controller.start()
 	await process_frame
 
@@ -65,6 +77,7 @@ func _make_game(level: LevelData) -> Dictionary:
 		"bus_queue": bus_queue,
 		"waiting_area": waiting_area,
 		"passenger_queues": passenger_queues,
+		"animation_layer": animation_layer,
 	}
 
 
@@ -73,12 +86,26 @@ func _free_game(game: Dictionary) -> void:
 	game["waiting_area"].queue_free()
 	for queue: PassengerQueue in game["passenger_queues"]:
 		queue.queue_free()
+	game["animation_layer"].queue_free()
 
 
 func _tap_front(queue: PassengerQueue) -> void:
 	var front: Passenger = queue.front()
 	if front != null:
 		front._on_pressed()
+
+
+## Waits until controller has left MOVING_PASSENGER (a move plus any
+## auto-board cascade it triggers has fully resolved), rather than a
+## guessed fixed delay -- exactly the invariant this task requires: no
+## assertion about post-move state runs before the animation actually
+## finishes. Bounded by MAX_SETTLE_FRAMES so a genuine stuck-state bug
+## fails the test instead of hanging the runner.
+func _await_settle(controller: GameController) -> void:
+	for i: int in MAX_SETTLE_FRAMES:
+		if controller.state != GameController.State.MOVING_PASSENGER:
+			return
+		await process_frame
 
 
 func _test_level_one_full_playthrough_wins() -> void:
@@ -96,12 +123,12 @@ func _test_level_one_full_playthrough_wins() -> void:
 	_check(bus_queue.active_bus().color == PassengerColor.Value.RED, "level 1: the active bus is red")
 
 	_tap_front(queue)
-	await create_timer(REMOVE_WAIT).timeout
+	await _await_settle(controller)
 	_check(bus_queue.active_bus().current_passengers == 1, "level 1: 1st matching passenger boards the active bus")
 	_check(controller.state == GameController.State.PLAYING, "level 1: back to PLAYING after the 1st move")
 
 	_tap_front(queue)
-	await create_timer(REMOVE_WAIT).timeout
+	await _await_settle(controller)
 	_check(controller.state == GameController.State.WON, "level 1: the level is won once its one bus fills up")
 	_check(controller.moves_made == 2, "level 1: exactly 2 moves were counted")
 
@@ -128,7 +155,7 @@ func _test_mismatched_color_routes_to_waiting_area() -> void:
 	var queue: PassengerQueue = game["passenger_queues"][0]
 
 	_tap_front(queue)
-	await create_timer(REMOVE_WAIT).timeout
+	await _await_settle(controller)
 
 	_check(bus_queue.active_bus().current_passengers == 0, "mismatched color never boards the active bus")
 	_check(waiting_area.get_slot_color(0) == PassengerColor.Value.RED, "mismatched passenger is routed to the waiting area instead")
@@ -153,15 +180,15 @@ func _test_auto_board_on_active_bus_change_can_win() -> void:
 
 	# Blue doesn't match the active red bus -- goes to the waiting area.
 	_tap_front(queue)
-	await create_timer(REMOVE_WAIT).timeout
+	await _await_settle(controller)
 	_check(waiting_area.get_slot_color(0) == PassengerColor.Value.BLUE, "blue passenger waits for its bus")
 
 	# Red matches and completes the red bus, advancing to the blue bus --
-	# which should immediately auto-board the waiting blue passenger,
-	# complete itself too, and win the level, all before this tap's
-	# animation-wait even finishes.
+	# the awaited auto-board cascade should then fly the waiting blue
+	# passenger onto it, complete it too, and win the level, all before
+	# _await_settle() returns.
 	_tap_front(queue)
-	await create_timer(REMOVE_WAIT).timeout
+	await _await_settle(controller)
 
 	_check(waiting_area.is_empty(), "the waiting blue passenger was auto-boarded once the blue bus became active")
 	_check(controller.state == GameController.State.WON, "auto-boarding the last passenger wins the level")
@@ -189,14 +216,14 @@ func _test_rejected_move_does_not_end_game_if_move_exists_elsewhere() -> void:
 	_check(waiting_area.is_full(), "waiting area is full (test setup)")
 
 	_tap_front(queues[0])  # blue: mismatched, and the waiting area is full
-	await create_timer(REMOVE_WAIT).timeout
+	await _await_settle(controller)
 
 	_check(controller.state == GameController.State.PLAYING, "a rejected move doesn't end the game while queue 2's red still matches")
 	_check(queues[0].passenger_count() == 1, "the rejected passenger is still in its queue")
 	_check(controller.moves_made == 0, "a rejected move doesn't count as a move")
 
 	_tap_front(queues[1])  # red: matches, completes the only bus -> win
-	await create_timer(REMOVE_WAIT).timeout
+	await _await_settle(controller)
 	_check(controller.state == GameController.State.WON, "the level can still be won after an earlier rejected move")
 
 	_free_game(game)
@@ -218,7 +245,7 @@ func _test_successful_move_can_trigger_deadlock_loss() -> void:
 	# room -- this move is accepted... and immediately traps queue 2's
 	# blue front with nowhere left to go and no bus it can ever match.
 	_tap_front(queues[0])
-	await create_timer(REMOVE_WAIT).timeout
+	await _await_settle(controller)
 
 	_check(controller.state == GameController.State.LOST, "a successful move that fills the last waiting slot can itself cause a deadlock loss")
 
@@ -239,7 +266,7 @@ func _test_cannot_process_same_passenger_twice() -> void:
 	var front: Passenger = queue.front()
 	front._on_pressed()
 	front._on_pressed()  # synchronous second tap on the same passenger
-	await create_timer(REMOVE_WAIT).timeout
+	await _await_settle(controller)
 
 	_check(bus_queue.active_bus().current_passengers == 1, "only one passenger boarded despite two synchronous taps on it")
 	_check(controller.moves_made == 1, "moves_made was only incremented once")

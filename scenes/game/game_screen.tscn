@@ -86,6 +86,13 @@ custom_minimum_size = Vector2(200, 100)
 layout_mode = 2
 text = "controls.pause"
 
+[node name="AnimationLayer" type="Control" parent="." unique_id=3350129871]
+unique_name_in_owner = true
+mouse_filter = 2
+layout_mode = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
+
 [node name="WinPopup" type="Control" parent="." unique_id=23135989]
 unique_name_in_owner = true
 visible = false

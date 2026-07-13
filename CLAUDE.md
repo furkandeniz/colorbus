@@ -78,14 +78,44 @@ freshly discovered by a bare `--script` run. If a brand-new class's tests
 fail this way, import first and retry before assuming the class itself is
 broken.
 
+A stronger, non-transient version of the same problem: **never write the
+bare name of an Autoload singleton anywhere in the source of a
+`class_name` script** (static method, instance method, doesn't matter),
+and never in a `--script` entry point either. `godot --headless --script`
+eagerly parses/validates every `class_name` script (and the entry script
+itself) to build the global class table *before* Autoloads are attached
+under `/root` — merely naming the identifier (e.g. `SettingsManager.
+reduce_motion`) anywhere in that source, even inside a method that's
+never called during this validation, corrupts that class's compiled form
+for the rest of the process: later calls to an affected method fail with
+`Nonexistent function` (as if the method didn't exist), or the whole class
+falls back to a wrong base type (`Trying to assign value of type 'Control'
+to a variable of type 'passenger.gd'`), and this does **not** self-heal
+with a fresh `--import` — re-importing a project registers the class fine
+(the import step has its own tolerant reload path) but every subsequent
+cold `--script` process re-triggers the exact same corruption on first
+touch. The only real fix is to never reference the Autoload by bare name
+from a `class_name` script's source at all — reach it via NodePath string
+instead: `Engine.get_main_loop().root.get_node_or_null("/root/SettingsManager")`
+(and `.get("prop")`/`.set("prop", v)`/`.call("method", ...)` instead of typed
+member access), since string literals aren't resolved as identifiers during
+that early pass. See `AnimationConfig._reduce_motion()` in
+`scripts/game/animation_config.gd` and `GameController._play_sfx()` in
+`scripts/game/game_controller.gd` for the pattern, and
+`tests/verify_game_animations.gd`'s `_get_reduce_motion()`/
+`_set_reduce_motion()` for the same trick from a test entry script. (Found
+while wiring `AnimationConfig`/`AudioManager` into `Passenger`, `Bus`, and
+`GameController` for the animation milestone.)
+
 ## Autoloads
 
 Only real global services are Autoload: `PlatformService`, `SaveManager`,
 `SettingsManager`, `AudioManager`, `AppRouter`. `GameController`
-(`scripts/game/game_controller.gd`) is deliberately **not** Autoload —
-it's a plain `RefCounted` constructed by `GameScreen` in `_ready()` and
-freed with it, so every level start is a genuinely fresh state machine,
-not persisted process-lifetime state.
+(`scripts/game/game_controller.gd`) and `GameAnimator`
+(`scripts/game/game_animator.gd`) are deliberately **not** Autoload —
+both are plain `RefCounted` constructed by `GameScreen` in `_ready()` and
+freed with it, so every level start is a genuinely fresh state machine and
+animator, not persisted process-lifetime state.
 
 ## Input handling
 

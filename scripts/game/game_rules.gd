@@ -33,20 +33,6 @@ static func has_any_legal_move(
 	return false
 
 
-## Boards every waiting passenger that matches bus's color, in FIFO order
-## (find_first_slot_of_color always returns the earliest-added match),
-## until the bus is full or no more matching passengers are waiting.
-## WaitingArea's removal is synchronous/non-animated, so this needs no
-## await -- see docs/ARCHITECTURE.md.
-static func auto_board_from_waiting_area(bus: Bus, waiting_area: WaitingArea) -> void:
-	while not bus.is_completed and bus.current_passengers < bus.capacity:
-		var index: int = waiting_area.find_first_slot_of_color(bus.color)
-		if index == -1:
-			break
-		var color: int = waiting_area.remove_passenger_at(index)
-		bus.board_passenger(color)
-
-
 ## The level is won once the bus queue itself is done -- every bus
 ## completed in sequence. Given LevelValidator guarantees total passenger
 ## count equals total bus capacity, this is also sufficient on its own

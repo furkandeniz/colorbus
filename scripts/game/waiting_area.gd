@@ -75,6 +75,25 @@ func find_first_slot_of_color(p_color: int) -> int:
 	return -1
 
 
+## The WaitingSlot Control at index, or null out of range -- for
+## animation targeting only (positioning a flying passenger). Gameplay
+## decisions must keep using get_slot_color()/find_first_slot_of_color(),
+## the safe data-only API.
+func get_slot_control(index: int) -> Control:
+	if index < 0 or index >= _slots.size():
+		return null
+	return _slots[index]
+
+
+## The live Passenger at index, or null if empty/out of range -- for
+## animation purposes only (e.g. hiding/revealing it during a flight),
+## same caveat as get_slot_control().
+func get_slot_passenger(index: int) -> Passenger:
+	if index < 0 or index >= _slots.size():
+		return null
+	return _slots[index].get_passenger()
+
+
 ## Adds a passenger of p_color to the first empty slot. Returns the slot
 ## index it landed in, or -1 if the area is already full (nothing changes
 ## in that case).
@@ -108,7 +127,7 @@ func remove_passenger_at(slot_index: int) -> int:
 	_occupancy.remove_at(slot_index)
 	_occupancy.append(PassengerColor.INVALID)
 	for i: int in range(slot_index, _occupancy.size()):
-		_render_slot(i)
+		_render_slot(i, true)
 
 	passenger_removed.emit(removed_color, slot_index)
 	if is_empty():
@@ -127,15 +146,47 @@ func remove_first_of_color(p_color: int) -> int:
 	return index
 
 
+## Like remove_passenger_at(), but hands back the live Passenger instead
+## of freeing it -- for callers that want to animate it (flying to a bus)
+## before disposing of it themselves. Still compacts everything after
+## slot_index left and still emits passenger_removed/waiting_area_emptied,
+## exactly like remove_passenger_at(), for parity.
+func take_passenger_at(slot_index: int) -> Passenger:
+	if slot_index < 0 or slot_index >= _occupancy.size():
+		return null
+
+	var removed_color: int = _occupancy[slot_index]
+	if not PassengerColor.is_valid(removed_color):
+		return null
+
+	var passenger: Passenger = _slots[slot_index].take_passenger()
+	if passenger != null and passenger.passenger_selected.is_connected(_on_passenger_selected):
+		passenger.passenger_selected.disconnect(_on_passenger_selected)
+
+	_occupancy.remove_at(slot_index)
+	_occupancy.append(PassengerColor.INVALID)
+	for i: int in range(slot_index, _occupancy.size()):
+		_render_slot(i, true)
+
+	passenger_removed.emit(removed_color, slot_index)
+	if is_empty():
+		waiting_area_emptied.emit()
+
+	return passenger
+
+
 func _on_passenger_selected(passenger: Passenger, slot_index: int) -> void:
 	passenger_selected.emit(passenger, slot_index)
 
 
 ## Rebuilds this one slot's Passenger from _occupancy[index] -- always
 ## clears first, then creates a fresh Passenger if that slot isn't empty.
-## Simple and correct rather than diffed/animated: nothing here requires
-## preserving a specific Passenger instance across a re-render.
-func _render_slot(index: int) -> void:
+## A fresh instance rather than moving the same node across slots is
+## still correct here (no gameplay state depends on instance identity),
+## but when this rebuild is a compaction shift (animate_compaction) the
+## new instance plays a brief "slid in from the right" entrance so the
+## compaction actually reads as movement rather than a silent pop-in.
+func _render_slot(index: int, animate_compaction: bool = false) -> void:
 	var slot: WaitingSlot = _slots[index]
 	slot.clear()
 
@@ -147,6 +198,9 @@ func _render_slot(index: int) -> void:
 	slot.set_passenger(passenger)
 	passenger.configure(color)
 	passenger.passenger_selected.connect(_on_passenger_selected.bind(index))
+
+	if animate_compaction:
+		passenger.play_slide_in_from_right()
 
 
 func _clear_slots() -> void:

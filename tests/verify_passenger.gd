@@ -100,22 +100,23 @@ func _test_disabled_gate() -> void:
 	var passenger: Control = await _make_passenger_ready()
 	passenger.configure(PassengerColor.Value.BLUE)
 
+	# _input_button is deliberately always enabled (see passenger.gd) so
+	# _on_pressed() -- not Button.disabled -- is the single gate; that's
+	# what makes play_rejected_feedback() reachable for an unselectable tap.
 	var input_button: Button = passenger.get_node("%InputButton")
-	var enabled_disabled_flag: bool = input_button.disabled
-	_check(not enabled_disabled_flag, "configured+selectable passenger's input button is not disabled")
+	_check(not input_button.disabled, "the input button stays enabled regardless of selectability")
 
 	passenger.set_disabled(true)
 	_check(not passenger.can_be_selected(), "set_disabled(true) blocks selection")
-	_check(input_button.disabled, "set_disabled(true) marks the input button disabled (distinct visual state)")
 
 	var received: Array = []
 	passenger.passenger_selected.connect(func(p: Control) -> void: received.append(p))
 	passenger._on_pressed()
 	_check(received.is_empty(), "disabled: press does not emit passenger_selected")
+	_check(not input_button.disabled, "the input button is still enabled after set_disabled(true) (rejected feedback still needs to run)")
 
 	passenger.set_disabled(false)
 	_check(passenger.can_be_selected(), "set_disabled(false) restores selection")
-	_check(not input_button.disabled, "set_disabled(false) clears the input button's disabled flag")
 
 	passenger.queue_free()
 

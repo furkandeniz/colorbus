@@ -58,6 +58,8 @@ func can_be_selected() -> bool:
 func _on_pressed() -> void:
 	if can_be_selected():
 		passenger_selected.emit(self)
+	else:
+		play_rejected_feedback()
 
 
 ## Foundation for board-position movement: tweens this passenger's
@@ -75,9 +77,44 @@ func _on_move_finished() -> void:
 	set_moving(false)
 
 
+## Brief "can't do that right now" feedback for a tap that didn't select
+## anything (see _on_pressed()): a quick rotational shake. Uses rotation
+## rather than position, since position is silently overridden every
+## frame by a parent Container (this may be sitting in a PassengerQueue's
+## VBoxContainer) -- rotation and scale are never touched by Container
+## layout, so they're safe to animate directly regardless of parent.
+func play_rejected_feedback() -> void:
+	pivot_offset = size / 2.0
+	var duration: float = AnimationConfig.duration(AnimationConfig.REJECTED_FEEDBACK)
+	var step: float = duration / 4.0
+	var tween: Tween = create_tween()
+	tween.tween_property(self, "rotation", deg_to_rad(8.0), step)
+	tween.tween_property(self, "rotation", deg_to_rad(-8.0), step)
+	tween.tween_property(self, "rotation", deg_to_rad(4.0), step)
+	tween.tween_property(self, "rotation", 0.0, step)
+
+
+## Brief "slid into place from the right" entrance, used by WaitingArea
+## when compaction shifts a freshly re-rendered passenger into this slot.
+## A plain local position tween is safe here since WaitingSlot (unlike a
+## Container) never overrides its child's position.
+func play_slide_in_from_right(distance: float = 60.0) -> void:
+	var target_x: float = position.x
+	position.x = target_x + distance
+	var duration: float = AnimationConfig.duration(AnimationConfig.WAITING_COMPACTION)
+	var tween: Tween = create_tween()
+	tween.tween_property(self, "position:x", target_x, duration)
+
+
 ## The only place appearance is computed/applied. A passenger that can't
 ## currently be selected (for any of the reasons in can_be_selected())
 ## always renders muted, regardless of which flag caused it.
+##
+## _input_button is deliberately kept enabled at all times, even when
+## can_be_selected() is false -- if it were Button.disabled, Godot would
+## never even call _on_pressed() for an unselectable passenger, and
+## play_rejected_feedback() (the "light feedback on an unselectable tap"
+## requirement) could never run. _on_pressed() is the single gate instead.
 ##
 ## configure()/set_selectable()/etc. can legitimately be called right after
 ## instantiate() + add_child(), before _ready() has run (@onready vars not
@@ -96,5 +133,3 @@ func _update_visual() -> void:
 	style.bg_color = display_color
 	style.set_corner_radius_all(CORNER_RADIUS)
 	_visual.add_theme_stylebox_override("panel", style)
-
-	_input_button.disabled = not active
