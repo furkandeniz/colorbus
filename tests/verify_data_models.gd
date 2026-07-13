@@ -1,10 +1,10 @@
 extends SceneTree
 ## Headless unit tests for the typed data models in scripts/data,
 ## scripts/entities and scripts/game (PassengerColor, PassengerData,
-## BusData, PassengerQueueData, WaitingAreaData, LevelData, GameState,
-## GameStateSnapshot). Pure data -- no scene tree/app boot needed, but this
-## still extends SceneTree since that's the simplest way to get a headless
-## process with a clean exit code.
+## BusData, PassengerQueueData, LevelData, GameState, GameStateSnapshot).
+## Pure data -- no scene tree/app boot needed, but this still extends
+## SceneTree since that's the simplest way to get a headless process with
+## a clean exit code.
 ##
 ## Usage: godot --headless --path . --script res://tests/verify_data_models.gd
 
@@ -16,7 +16,6 @@ func _initialize() -> void:
 	_test_passenger_data()
 	_test_bus_data()
 	_test_passenger_queue_data()
-	_test_waiting_area_data()
 	_test_level_data()
 	_test_game_state()
 	_test_game_state_snapshot()
@@ -89,44 +88,46 @@ func _test_passenger_queue_data() -> void:
 	_check(not bad_queue.is_valid(), "PassengerQueueData with invalid passenger is invalid")
 
 
-func _test_waiting_area_data() -> void:
-	var source_array: Array = [
-		[{"color": "red"}],
-		[{"color": "green"}, {"color": "purple"}],
-	]
-	var area: WaitingAreaData = WaitingAreaData.from_array(source_array)
-	_check(area.slot_count() == 2, "WaitingAreaData slot_count")
-	_check(area.is_valid(), "WaitingAreaData valid")
-	_check(area.to_array() == source_array, "WaitingAreaData round-trip to_array")
-
-	var bad_area: WaitingAreaData = WaitingAreaData.from_array([[{"color": "nope"}]])
-	_check(not bad_area.is_valid(), "WaitingAreaData with invalid passenger is invalid")
-
-
+## A fully-shaped, balanced level dict (red: capacity 2 / 2 passengers,
+## blue: capacity 3 / 3 passengers) -- the data-model layer doesn't itself
+## check balance (that's LevelValidator's job, covered in
+## tests/verify_level_loading.gd), but there's no reason to hand these
+## tests an unrealistic sample.
 func _make_sample_level_dict() -> Dictionary:
 	return {
-		"id": "level_001",
-		"waiting_area": [
-			[{"color": "red"}, {"color": "blue"}],
-			[{"color": "yellow"}],
-		],
+		"id": 42,
+		"name_key": "level.test.name",
+		"waiting_slot_count": 3,
 		"buses": [
 			{"color": "red", "capacity": 2},
 			{"color": "blue", "capacity": 3},
 		],
+		"passenger_queues": [
+			[{"color": "red"}, {"color": "blue"}],
+			[{"color": "blue"}, {"color": "blue"}, {"color": "red"}],
+		],
+		"move_limit": 20,
+		"tutorial": false,
+		"difficulty": 2,
 	}
 
 
 func _test_level_data() -> void:
 	var level: LevelData = LevelData.from_dict(_make_sample_level_dict())
 	_check(level.is_valid(), "LevelData valid sample")
-	_check(level.bus_queue.size() == 2, "LevelData bus_queue size")
-	_check(level.waiting_area.slot_count() == 2, "LevelData waiting_area slot_count")
+	_check(level.id == 42, "LevelData id")
+	_check(level.name_key == "level.test.name", "LevelData name_key")
+	_check(level.waiting_slot_count == 3, "LevelData waiting_slot_count")
+	_check(level.buses.size() == 2, "LevelData buses size")
+	_check(level.passenger_queues.size() == 2, "LevelData passenger_queues size")
+	_check(level.move_limit == 20, "LevelData move_limit")
+	_check(not level.tutorial, "LevelData tutorial")
+	_check(level.difficulty == 2, "LevelData difficulty")
 
 	var empty_level: LevelData = LevelData.from_dict({})
 	_check(not empty_level.is_valid(), "LevelData empty dict is invalid")
 
-	var no_buses_level: LevelData = LevelData.from_dict({"id": "x", "waiting_area": []})
+	var no_buses_level: LevelData = LevelData.from_dict({"id": 1, "waiting_slot_count": 3})
 	_check(not no_buses_level.is_valid(), "LevelData with no buses is invalid")
 
 
@@ -135,9 +136,13 @@ func _test_game_state() -> void:
 	var state: GameState = GameState.from_level(level)
 
 	_check(state.is_valid(), "GameState from valid level is valid")
+	_check(state.level_id == 42, "GameState.level_id matches LevelData.id")
+	_check(state.waiting_slot_count == 3, "GameState.waiting_slot_count matches LevelData")
+	_check(state.passenger_queues.size() == 2, "GameState.passenger_queues carried over from LevelData")
 	_check(state.current_bus != null and state.current_bus.color == PassengerColor.Value.RED, "GameState current_bus is first bus")
 	_check(state.bus_queue.size() == 1, "GameState bus_queue popped first bus")
 	_check(state.moves_made == 0, "GameState starts with zero moves")
+	_check(state.move_limit == 20, "GameState.move_limit matches LevelData")
 
 
 func _test_game_state_snapshot() -> void:
@@ -151,6 +156,8 @@ func _test_game_state_snapshot() -> void:
 
 	var restored: GameState = snapshot.restore_game_state()
 	_check(restored.level_id == state.level_id, "GameStateSnapshot restores level_id")
+	_check(restored.waiting_slot_count == state.waiting_slot_count, "GameStateSnapshot restores waiting_slot_count")
+	_check(restored.passenger_queues.size() == state.passenger_queues.size(), "GameStateSnapshot restores passenger_queues")
 	_check(restored.moves_made == 4, "GameStateSnapshot restores moves_made")
 	_check(restored.current_bus.color == state.current_bus.color, "GameStateSnapshot restores current_bus")
 	_check(restored.is_valid(), "restored GameState is valid")

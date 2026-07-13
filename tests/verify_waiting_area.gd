@@ -139,12 +139,12 @@ func _test_dynamic_slot_count() -> void:
 	# The requirement is specifically that slot count can come from
 	# LevelData -- prove that path end to end, not just a bare int.
 	var level: LevelData = LevelData.from_dict({
-		"id": "level_dynamic_slots",
-		"waiting_area": [[], [], [], []],
+		"id": 999,
+		"waiting_slot_count": 4,
 		"buses": [{"color": "red", "capacity": 1}],
 	})
-	area.configure(level.waiting_area.slot_count())
-	_check(area.slot_count() == level.waiting_area.slot_count(), "slot count can be driven from LevelData.waiting_area.slot_count()")
+	area.configure(level.waiting_slot_count)
+	_check(area.slot_count() == level.waiting_slot_count, "slot count can be driven from LevelData.waiting_slot_count")
 	_check(area.slot_count() == 4, "the LevelData in this test specifies 4 slots")
 
 	area.queue_free()

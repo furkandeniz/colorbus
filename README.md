@@ -5,28 +5,31 @@ single GDScript codebase shared by Android and iOS.
 
 ## Status
 
-Milestone 7: WaitingSlot/WaitingArea scenes, on top of Milestone 6's Bus and
-BusQueue, Milestone 5's PassengerQueue, Milestone 4's reusable Passenger
-scene, Milestone 3's typed data models, and Milestone 2's app navigation
-shell. MainMenu (Play / Levels / Settings) navigates to LevelSelect and
-Settings placeholder screens through `AppRouter`, with centralized back
-navigation (in-app Back button and the Android hardware back button both
-funnel through the same code path). `SaveManager`, `SettingsManager` and
-`AudioManager` exist as service foundations. `PassengerColor`/
-`PassengerData`/`BusData`/`PassengerQueueData`/`WaitingAreaData`/
-`LevelData`/`GameState`/`GameStateSnapshot` exist as the pure-data layer for
-gameplay. `scenes/entities/passenger.tscn` is a colored, selectable
-passenger token; `scenes/game/passenger_queue.tscn` stacks them vertically,
-keeping only the front selectable. `scenes/entities/bus.tscn` is a colored
-bus with a capacity, a fill indicator, and same-color boarding logic;
+Milestone 8: JSON-based level system, on top of Milestone 7's WaitingSlot/
+WaitingArea, Milestone 6's Bus and BusQueue, Milestone 5's PassengerQueue,
+Milestone 4's reusable Passenger scene, Milestone 3's typed data models, and
+Milestone 2's app navigation shell. MainMenu (Play / Levels / Settings)
+navigates to LevelSelect and Settings placeholder screens through
+`AppRouter`, with centralized back navigation (in-app Back button and the
+Android hardware back button both funnel through the same code path).
+`SaveManager`, `SettingsManager` and `AudioManager` exist as service
+foundations. `LevelLoader`/`LevelValidator`/`LevelRepository` load, validate
+(with descriptive per-field errors) and enumerate `data/levels/*.json` --
+five sample levels, easy to hard, ship today. `PassengerColor`/
+`PassengerData`/`BusData`/`PassengerQueueData`/`LevelData`/`GameState`/
+`GameStateSnapshot` are the pure-data layer for gameplay.
+`scenes/entities/passenger.tscn` is a colored, selectable passenger token;
+`scenes/game/passenger_queue.tscn` stacks them vertically, keeping only the
+front selectable. `scenes/entities/bus.tscn` is a colored bus with a
+capacity, a fill indicator, and same-color boarding logic;
 `scenes/game/bus_queue.tscn` runs buses in sequence, only the first ever
 active. `scenes/entities/waiting_slot.tscn` holds at most one passenger;
 `scenes/game/waiting_area.tscn` is a row of them (default 3, resizable),
 filling the first empty slot, finding/removing by color, and always
 compacting left with no gaps left behind (see
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)). No Game scene and no real
-gameplay flow exist yet -- none of Passenger(Queue), Bus(Queue), or
-WaitingArea are wired to each other.
+gameplay flow exist yet -- none of Passenger(Queue), Bus(Queue), WaitingArea,
+or the level system are wired to each other.
 
 ## Tech stack
 
@@ -53,7 +56,7 @@ WaitingArea are wired to each other.
 
 ```
 assets/            art, audio, fonts (by category)
-data/levels/        JSON level definitions
+data/levels/        JSON level definitions (5 sample levels, easy to hard)
 docs/                architecture and process docs
 exports/             local export output (git-ignored)
 scenes/app/          root/app-shell scenes
@@ -64,11 +67,12 @@ scenes/game/         passenger_queue.tscn, bus_queue.tscn, waiting_area.tscn
 scenes/menus/        menu scenes
 scenes/ui/           reusable UI components
 scripts/core/        AppRouter, AudioManager, other cross-cutting services
-scripts/data/        SaveManager, SettingsManager, PassengerColor, LevelData
+scripts/data/        SaveManager, SettingsManager, PassengerColor, LevelData,
+                     LevelLoader, LevelValidator, LevelRepository
 scripts/entities/    PassengerData, BusData (data) + Passenger, Bus,
                      WaitingSlot (views)
-scripts/game/        PassengerQueueData, WaitingAreaData, GameState(Snapshot),
-                     PassengerQueue, BusQueue, WaitingArea (scene views)
+scripts/game/        PassengerQueueData, GameState(Snapshot), PassengerQueue,
+                     BusQueue, WaitingArea (scene views)
 scripts/platform/    PlatformService and platform-specific code
 scripts/ui/          UI scripts (MainMenu, app shell)
 tests/               dependency-free GDScript test runner
@@ -124,6 +128,11 @@ This runs, in order:
     after a removal, a dynamic slot count (including one derived from
     `LevelData`), and the full/emptied/added/removed signals
     (`tests/verify_waiting_area.gd`)
+15. Level loading/validation checks -- a valid level loads, a missing
+    field/unknown color/capacity mismatch are each rejected with a
+    descriptive error, a nonexistent file fails gracefully (not a crash),
+    and all 5 sample levels load and validate
+    (`tests/verify_level_loading.gd`)
 
 Exits 0 only if every step above passes except the informational unused-
 script report. See `tools/validation/` for the individual checks and

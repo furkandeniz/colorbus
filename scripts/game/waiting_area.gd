@@ -1,7 +1,7 @@
 class_name WaitingArea
 extends HBoxContainer
 ## Row of WaitingSlot positions (default 3, resizable via configure(),
-## e.g. from LevelData.waiting_area.slot_count()). Passengers go into the
+## e.g. from LevelData.waiting_slot_count). Passengers go into the
 ## first empty slot and are kept in arrival order; a passenger can be
 ## found/removed by color from any position, and removing one always
 ## compacts the rest left with no gaps.

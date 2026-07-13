@@ -117,11 +117,11 @@ reserved for future gameplay controls/bottom navigation.
 
 ## Data
 
-- Levels are authored as JSON under `data/levels/` (no files exist yet --
-  the loader described below is ready, but no level content has been
-  authored, and no scene loads a level yet). JSON is validated before use —
-  malformed or missing fields must fail loudly, not silently produce a
-  broken level.
+- Levels are authored as JSON under `data/levels/` — five sample levels
+  ship today (see the "Level system" section below for the full pipeline:
+  `LevelLoader`/`LevelValidator`/`LevelRepository`). JSON is validated
+  before use — malformed or missing fields must fail loudly, not silently
+  produce a broken level.
 - Local saves use `user://` exclusively, and store plain data only (no Node
   references), per [CLAUDE.md](../CLAUDE.md). `SaveManager`
   (`scripts/data/save_manager.gd`) is the loader/writer foundation
@@ -147,9 +147,9 @@ BusData                 -- { color, capacity }
   ↓
 PassengerQueueData      -- ordered Array[PassengerData] (one waiting line)
   ↓
-WaitingAreaData         -- Array[PassengerQueueData] (all the waiting slots)
-  ↓
-LevelData               -- { level_id, waiting_area, bus_queue }, from JSON
+LevelData               -- { id, name_key, waiting_slot_count, buses,
+                           passenger_queues, move_limit, tutorial,
+                           difficulty }, from JSON (see "Level system" below)
   ↓
 GameState               -- LevelData + in-progress play state (current_bus,
                            moves_made, is_complete, is_failed)
@@ -165,11 +165,14 @@ GameStateSnapshot       -- GameState frozen into a plain Dictionary
   ultimately bottoms out in `PassengerColor.is_valid()`, so an unrecognized
   color string anywhere in a level makes that whole level fail validation
   rather than loading with a wrong/blank color.
-- Every model has an `is_valid()`, and validity composes: `LevelData.is_valid()`
-  checks `WaitingAreaData.is_valid()`, which checks every
-  `PassengerQueueData.is_valid()`, which checks every
-  `PassengerData.is_valid()`, which checks `PassengerColor.is_valid()`. One
-  bad color anywhere fails the whole chain.
+- Every model has an `is_valid()`, and validity composes:
+  `LevelData.is_valid()` checks every `BusData.is_valid()` and
+  `PassengerQueueData.is_valid()` (which checks every
+  `PassengerData.is_valid()`, which checks `PassengerColor.is_valid()`).
+  This is a basic *structural* check only, though — the full business-rule
+  validation (positive id, capacity balance per color, etc.) is
+  `LevelValidator`'s job, run on the raw JSON before a `LevelData` is ever
+  built (see "Level system" below).
 - `GameState` is the mutable "current play session" derived from a
   `LevelData` via `GameState.from_level()` (which also pops the first bus
   off the queue into `current_bus`). It still isn't a `GameController` —
@@ -178,7 +181,7 @@ GameStateSnapshot       -- GameState frozen into a plain Dictionary
   data: its `data` field is a `Dictionary` of primitives/Arrays/Dictionaries
   built by `GameStateSnapshot.from_game_state()`, JSON-serializable via
   `to_json_string()`/`from_json_string()`, and turned back into a live
-  `GameState` (with real `BusData`/`WaitingAreaData` instances) only by
+  `GameState` (with real `BusData`/`PassengerQueueData` instances) only by
   `restore_game_state()`. This is what save/undo/replay will serialize —
   never a `GameState` or any model object directly.
 - All the `from_dict()`/`from_array()` parsers are defensive: an
@@ -408,6 +411,76 @@ WaitingArea (HBoxContainer, script=waiting_area.gd)
   responsive app shell (see the "App shell" section above) without any
   extra work once something actually places it there.
 
+## Level system (Milestone 8)
+
+`data/levels/*.json` is the on-disk format; `scripts/data/level_loader.gd`,
+`level_validator.gd`, and `level_repository.gd` are the pipeline that turns
+a file into a trustworthy `LevelData` — or a descriptive, non-crashing
+error if it isn't one.
+
+```
+level_NN.json
+  ↓ (raw text)
+LevelLoader.load_level(path)
+  ├─ file missing / unreadable / invalid JSON  -> LevelLoadResult (level=null, errors=[...])
+  ├─ LevelValidator.validate(dict, path)        -> LevelValidationResult
+  │    invalid                                  -> LevelLoadResult (level=null, errors=validation.errors)
+  │    valid
+  ↓
+LevelData.from_dict(dict)                       -> LevelLoadResult (level=LevelData, errors=[])
+```
+
+- **JSON schema** (all 8 fields required): `id` (positive int), `name_key`
+  (non-empty string, a localization key -- never raw display text, per
+  the same convention as the menu screens), `waiting_slot_count` (int > 0,
+  matches `WaitingArea.configure()`), `buses` (array of `{color,
+  capacity}`), `passenger_queues` (array of arrays of `{color}`, matches
+  `PassengerQueueData`/`PassengerQueue.configure()`), `move_limit` (int
+  ≥ 0), `tutorial` (bool), `difficulty` (int).
+- **`LevelValidator.validate(data, source_label)`** never touches
+  `LevelData` at all — it works purely on the raw `Dictionary`, and
+  collects *every* applicable error in one pass (not just the first) into
+  a `LevelValidationResult`, each entry already formatted as
+  `"<source_label>: <field.path> - <message>"` (e.g. `"res://data/levels/
+  level_03.json: buses[1].capacity - must be positive (got 0)"`) — this is
+  the literal "errors need a descriptive filename and field path"
+  requirement. Structural checks (required fields present, right types)
+  run first; the four business rules only run once those pass, since
+  reporting a capacity-balance mismatch on top of an already-malformed
+  `buses` array would just be noise:
+  - `id` positive, `waiting_slot_count` > 0.
+  - Every bus color is a recognized `PassengerColor` and every capacity is
+    positive.
+  - Every passenger color (in every queue) is a recognized
+    `PassengerColor` — an unknown color anywhere fails the whole level.
+  - Total passenger count across all queues equals total bus capacity,
+    **and** each individual color's passenger count equals that color's
+    total bus capacity (checked over the union of colors appearing on
+    either side, so a color with passengers but no matching bus is caught
+    too, not just an overall-total mismatch).
+- **`LevelLoader.load_level(path) -> LevelLoadResult`** is the only place
+  that touches the filesystem/JSON parser for a level. A missing file, a
+  file that isn't valid JSON, or a `LevelValidator` failure all produce a
+  `LevelLoadResult` with `level = null` and a populated `errors` array —
+  never an exception, never a partially-built `LevelData`. `LevelData.
+  from_dict()` is only ever called after validation passes, so **a raw
+  JSON `Dictionary` never reaches a game scene** — only a validated,
+  typed `LevelData` does (the literal "don't hand raw JSON dicts to game
+  scenes" requirement).
+- **`LevelRepository`** enumerates `data/levels/*.json` (sorted by
+  filename) and loads them independently — `load_all_levels()` returns one
+  `LevelLoadResult` per file, so one broken level file never prevents the
+  other four from loading; `load_level_by_id(id)` searches for a specific
+  level and returns a `LevelLoadResult` with a descriptive "no level
+  defines id N" error (not a crash) if none matches.
+- **The 5 sample levels** (`data/levels/level_01.json` .. `level_05.json`)
+  go easy to hard: 1 color/1 bus (`tutorial: true`) up to all 5 colors
+  across 5 buses and a 6-slot waiting area, `difficulty` 1 through 5 and
+  `move_limit` increasing alongside. Every one is balanced (validated by
+  `tests/verify_level_loading.gd`, which also intentionally breaks a copy
+  of a valid level in four different ways under `user://` to prove each
+  rejection path actually rejects, without ever touching the real files).
+
 ## Audio
 
 `AudioManager` (`scripts/core/audio_manager.gd`) is a plumbing-only
@@ -475,6 +548,15 @@ volume is wired to the engine's built-in "Master" bus and reacts live to
   a color can be found by its slot index, removing (from the front *and*
   from the middle) always compacts everything after it left with no gaps,
   the slot count is resizable both directly and via a real
-  `LevelData.waiting_area.slot_count()`, and `waiting_area_full`/
+  `LevelData.waiting_slot_count`, and `waiting_area_full`/
   `waiting_area_emptied`/`passenger_added`/`passenger_removed` all fire at
   exactly the right moments — not one slot early or late.
+- The level system is verified by `tests/verify_level_loading.gd`: a valid
+  level loads successfully, a level missing a required field is rejected
+  with an error naming both that field and the source file, an unknown
+  color is rejected, a total-passenger/total-capacity mismatch is
+  rejected, loading a file that doesn't exist fails gracefully (not a
+  crash), and all 5 real sample levels under `data/levels/` load and
+  validate, in id order, with strictly increasing difficulty. The broken-
+  level cases write temporary files under `user://test_levels/` (cleaned
+  up afterward) rather than ever touching the real `data/levels/` files.
