@@ -674,7 +674,94 @@ points (`"passenger_board_bus"`, `"passenger_to_waiting"`) added in
 Milestone 10, so wiring up real `AudioStream`s later is just
 `register_sfx()` calls, no further code changes. Master volume is wired to
 the engine's built-in "Master" bus and reacts live to
-`SettingsManager.settings_changed`.
+`SettingsManager.settings_changed`. As of Milestone 11, `play_sfx()`/
+`play_music()` also no-op outright when `SaveManager.sound_enabled`/
+`music_enabled` is false — the only place those two toggles are actually
+consulted; nothing else needs to check them separately.
+
+## Save and progress (Milestone 11)
+
+`SaveManager` (`scripts/data/save_manager.gd`, Autoload, plain data only —
+no Node/Object reference ever touches `user://save.json`) is local
+persistence for level progress and a few user-facing toggles.
+
+- **Schema**: `save_version` (int), `highest_unlocked_level` (int, level
+  `id`s are 1-indexed and contiguous per `LevelRepository`'s sample set —
+  a fresh save starts at `1`), `completed_levels` (`Array[int]`),
+  `level_stars` (`Dictionary`, **always keyed by `String(level_id)`** —
+  see below), `music_enabled`/`sound_enabled`/`vibration_enabled` (all
+  default `true`), `first_launch_completed` (bool), `last_played_level`
+  (int, `0` = none yet).
+- **String keys for `level_stars`, deliberately**: a `Dictionary` with int
+  keys round-tripped through `JSON.stringify()`/`JSON.parse()` always
+  comes back with **String** keys (a JSON object's keys are always
+  strings) — reading it back with the original int key would silently
+  miss every entry that was ever saved to disk. Both
+  `get_stars_for_level()` and `record_level_result()` convert with
+  `str(level_id)` on every access so an in-memory-only value and a
+  freshly-loaded one behave identically; there's no separate "the ints
+  are for fresh sessions, the strings are for loaded ones" split to get
+  wrong.
+- **Never downgrading a star result**: `record_level_result(level_id,
+  stars)` is safe to call on every replay of an already-completed
+  level — it always keeps `max(previous_stars, stars)`, so a sloppier
+  second playthrough can never erase a better first one.
+- **Unlocking**: `record_level_result()` also sets
+  `highest_unlocked_level = max(highest_unlocked_level, level_id + 1)` —
+  winning level *N* unlocks level *N+1*, immediately, in the same call
+  that records the star result (no separate "sync progress" step
+  anywhere).
+- **Star rating**: `GameRules.calculate_stars(moves_made, move_limit)`
+  (pure, stateless, same home as `has_any_legal_move()`/`is_level_won()`)
+  rates 3 stars at ≤50% of `move_limit`, 2 at ≤75%, 1 otherwise — a win
+  always earns **at least 1 star**, even over the limit, since
+  `move_limit` isn't currently a loss condition (see Milestone 9) and
+  finishing at all shouldn't be worth zero. `GameController._check_game_over()`
+  calls `GameRules.calculate_stars()` and hands the result to
+  `SaveManager.record_level_result()` the instant `WON` is reached.
+- **Atomic-ish write**: `save_data()` writes the full JSON payload to a
+  sibling `save.json.tmp` file first, then `DirAccess.rename()`s it over
+  `save.json` — an OS-level rename on every platform this project targets,
+  so a crash or power loss mid-write can never leave a half-written,
+  corrupt `save.json` in place; readers only ever see either the fully-old
+  or fully-new file.
+- **Corrupt file / missing file handling**: `load_data()` treats a missing
+  file, an unreadable file, invalid JSON, and valid-JSON-but-not-an-object
+  identically — reset to fresh defaults, **then immediately persist those
+  defaults** (so a corrupt file self-heals on the very next launch instead
+  of hitting the same corruption forever) — never a crash.
+- **Migration hook, not yet exercised for real**: `_migrate(data)` reads
+  `data["save_version"]` (defaulting to `0` for a file with no version
+  field at all) and loops `_migrate_step()` until the data is
+  `CURRENT_SAVE_VERSION`. Only the `0 -> 1` step exists today (stamps the
+  version, no shape change needed since v1 is this milestone's first-ever
+  schema) — a future schema change adds another `match` arm to
+  `_migrate_step()` that actually transforms the dict's shape;
+  `load_data()`/`save_data()` themselves never need to change.
+- **`GameController` reaching `SaveManager`**: `GameController` is a
+  `class_name` script, so it reaches `SaveManager` the same NodePath-string
+  way `_play_sfx()` already reaches `AudioManager` (see Milestone 10's
+  writeup and CLAUDE.md) — `_record_level_result()` never writes the bare
+  `SaveManager` identifier anywhere in its source.
+- **LevelSelect**: reads `SaveManager.is_level_unlocked(id)`/
+  `get_stars_for_level(id)` per level and renders accordingly — a locked
+  level gets a disabled `Button` and a `"level.locked"` status label
+  instead of a star count. `LevelSelect` never decides progress itself,
+  only reflects whatever `SaveManager` already has.
+- **`MainMenu`'s Play button**: resumes `SaveManager.get_last_played_level()`
+  if there is one, otherwise starts `get_highest_unlocked_level()` (level 1
+  on a fresh save) — replacing Milestone 9's placeholder that always
+  opened LevelSelect. `MainMenu._ready()` also calls
+  `SaveManager.mark_first_launch_complete()` (a no-op after the first
+  call) — simply reaching the main menu at all counts as "launched before"
+  for now; there's no dedicated first-launch/onboarding UI yet, just the
+  persisted flag for one to read later.
+- **`GameScreen`/`MainMenu` reach `SaveManager` directly**: unlike
+  `GameController`, neither of these scripts has a `class_name` — they're
+  loaded as part of instancing their `.tscn` (during another script's
+  `_initialize()`), which the CLAUDE.md gotcha explicitly carves out as
+  safe, same as their existing direct `AppRouter`/`PlatformService`
+  references.
 
 ## Testing
 
@@ -774,3 +861,29 @@ the engine's built-in "Master" bus and reacts live to
   unselectable tap's `play_rejected_feedback()` shake animates rotation
   without ever emitting `passenger_selected`; and a static grep confirms
   no gameplay script reaches for a particle system.
+- The Milestone 11 save system is verified by `tests/verify_save_manager.gd`:
+  first-launch defaults (and that a default save file is actually written
+  to disk, not just held in memory); a save/reload round trip for every
+  field (progress, toggles, first-launch, last-played); a corrupt
+  `save.json` falling back to fresh defaults instead of crashing, and
+  self-healing the file on disk so the next load doesn't hit the same
+  corruption; winning a level unlocking the next one; a worse replay never
+  downgrading an earlier best star result; and `music_enabled`/
+  `sound_enabled`/`vibration_enabled` surviving a reload. `SaveManager`
+  owns the one real path (`user://save.json`) under test — this backs up
+  whatever's genuinely on disk before mutating it and restores it
+  afterward, the same spirit as `verify_level_loading.gd`'s temp-file
+  approach, just necessarily against the real path since that *is* the
+  thing being tested.
+- LevelSelect is verified by `tests/verify_level_select.gd`: all 5 sample
+  levels are listed; a locked level renders a disabled `Button` and a
+  `"level.locked"` status label instead of a star count; tapping an
+  unlocked level's real `Button.pressed` signal (not a direct method call)
+  opens `GameScreen` with the correct level id; winning that level through
+  actual gameplay (the same tap-front-twice flow as
+  `verify_game_controller.gd`'s level-1 test) unlocks the next level
+  immediately; and progress survives a simulated app restart —
+  `SaveManager.load_data()` re-reading `save.json` from disk exactly like
+  a cold launch would, followed by rebuilding LevelSelect and confirming
+  the unlock and star count are still there. Also backs up/restores the
+  real `save.json`, same as `verify_save_manager.gd`.

@@ -12,12 +12,18 @@ func _ready() -> void:
 	_levels_button.pressed.connect(_on_levels_pressed)
 	_settings_button.pressed.connect(_on_settings_pressed)
 
+	# Reaching the main menu at all is "the app has launched" -- marks
+	# first-launch complete exactly once (a no-op on every later launch).
+	SaveManager.mark_first_launch_complete()
 
+
+## Resumes the last-played level if there is one, otherwise starts the
+## furthest level the player has unlocked (level 1 on a fresh save).
 func _on_play_pressed() -> void:
-	# Placeholder routing: with no gameplay yet, Play goes to LevelSelect
-	# the same as Levels. Will change to "resume/next level" once gameplay
-	# and save progress exist.
-	AppRouter.push_screen(AppRouter.Screen.LEVEL_SELECT)
+	var level_id: int = SaveManager.get_last_played_level()
+	if level_id <= 0:
+		level_id = SaveManager.get_highest_unlocked_level()
+	AppRouter.start_level(level_id)
 
 
 func _on_levels_pressed() -> void:

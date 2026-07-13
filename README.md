@@ -5,6 +5,25 @@ single GDScript codebase shared by Android and iOS.
 
 ## Status
 
+Milestone 11: local save and level progression. `SaveManager`
+(`scripts/data/save_manager.gd`) persists `user://save.json`: which level is
+the furthest unlocked, which are completed and their best star rating
+(1-3, never downgraded by a worse replay -- see `record_level_result()`),
+`music_enabled`/`sound_enabled`/`vibration_enabled`, first-launch status,
+and the last-played level. Writes are write-to-temp-then-rename (so a
+crash mid-write can't corrupt the file), a `save_version` field plus a
+`_migrate()` step function exist for a future schema change, and a
+missing/corrupt file always falls back to (and persists) fresh defaults
+rather than crashing. `LevelSelect` now reads real progress: locked levels
+show a disabled button, unlocked/completed ones show their star count, and
+winning a level unlocks the next one immediately, with no separate "sync"
+step. `GameRules.calculate_stars()` rates a win 1-3 stars from
+`moves_made` vs. the level's `move_limit` (a win always earns at least 1
+star). `MainMenu`'s Play button now resumes the last-played level (or the
+furthest unlocked one on a fresh save) instead of always opening
+LevelSelect. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the save
+schema and migration design.
+
 Milestone 10: the game animates. Every passenger move (queue -> bus, queue
 -> waiting slot, waiting slot -> bus via auto-board), waiting-area
 compaction, a bus filling up and exiting, a new bus arriving, a rejected
@@ -164,6 +183,20 @@ This runs, in order:
     overlay animation layer, an unselectable tap's rejected-feedback shake
     plays without emitting selection, and no gameplay animation touches a
     particle system (`tests/verify_game_animations.gd`)
+18. SaveManager checks -- first-launch defaults (and that a default save is
+    actually written to disk), a save/reload round trip for every field, a
+    corrupt save file falling back to fresh defaults instead of crashing
+    (and self-healing the file on disk), winning a level unlocking the
+    next one, a worse replay never downgrading an earlier best star
+    result, and music/sound/vibration toggles surviving a reload
+    (`tests/verify_save_manager.gd`)
+19. LevelSelect checks -- all 5 sample levels are listed, a locked level
+    shows a disabled button with no star count, tapping an unlocked
+    level's real `Button.pressed` signal opens `GameScreen` with the
+    correct level id, winning that level through real gameplay unlocks the
+    next one immediately, and progress (unlock state and stars) survives a
+    simulated app restart (`SaveManager.load_data()` re-reading
+    `save.json` from disk) (`tests/verify_level_select.gd`)
 
 Exits 0 only if every step above passes except the informational unused-
 script report. See `tools/validation/` for the individual checks and

@@ -2,6 +2,8 @@ extends Node
 ## Autoload singleton. Foundation for audio playback. No sound assets exist
 ## yet (assets/audio/ is empty) so play_sfx()/play_music() are safe no-ops
 ## until streams are registered -- this is the plumbing, not the content.
+## Also honors SaveManager.sound_enabled/music_enabled -- both default true,
+## so this is invisible until a settings toggle actually flips one off.
 
 var _sfx_player: AudioStreamPlayer
 var _music_player: AudioStreamPlayer
@@ -34,6 +36,8 @@ func register_music(key: String, stream: AudioStream) -> void:
 
 
 func play_sfx(key: String) -> void:
+	if not SaveManager.is_sound_enabled():
+		return
 	var stream: AudioStream = _sfx_streams.get(key)
 	if stream == null:
 		return
@@ -43,6 +47,8 @@ func play_sfx(key: String) -> void:
 
 
 func play_music(key: String) -> void:
+	if not SaveManager.is_music_enabled():
+		return
 	var stream: AudioStream = _music_streams.get(key)
 	if stream == null:
 		return

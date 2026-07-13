@@ -224,10 +224,27 @@ func _check_game_over() -> void:
 	if state == State.WON or state == State.LOST:
 		return
 	if GameRules.is_level_won(_bus_queue):
+		_record_level_result()
 		_set_state(State.WON)
 		return
 	if not GameRules.has_any_legal_move(_passenger_queues, _bus_queue.active_bus(), _waiting_area):
 		_set_state(State.LOST)
+
+
+## Reaches SaveManager via NodePath string for the same reason _play_sfx()
+## reaches AudioManager that way -- see AnimationConfig's class doc
+## comment. Records this win's star rating, which unlocks level.id + 1 and
+## never downgrades a better star result from an earlier playthrough (see
+## SaveManager.record_level_result()).
+func _record_level_result() -> void:
+	var tree: SceneTree = _bus_queue.get_tree() if is_instance_valid(_bus_queue) else null
+	if tree == null:
+		return
+	var save: Node = tree.root.get_node_or_null("/root/SaveManager")
+	if save == null:
+		return
+	var stars: int = GameRules.calculate_stars(moves_made, level.move_limit)
+	save.call("record_level_result", level.id, stars)
 
 
 func _set_state(new_state: State) -> void:

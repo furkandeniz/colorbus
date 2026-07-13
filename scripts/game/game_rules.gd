@@ -41,3 +41,24 @@ static func has_any_legal_move(
 ## peace of mind.
 static func is_level_won(bus_queue: BusQueue) -> bool:
 	return bus_queue.active_bus() == null
+
+
+## Star rating for a completed level, from how many player moves it took
+## relative to the level's authored move_limit (the minimum possible is
+## always exactly one player move per passenger, regardless of whether it
+## routes straight to a bus or via the waiting area -- auto-boarding from
+## the waiting area doesn't count as a move). A win always earns at least
+## 1 star, even over the limit -- move_limit isn't currently a loss
+## condition (see docs/ARCHITECTURE.md), so finishing at all is never
+## worth zero. A level authored with no move_limit (<= 0) can't be rated
+## for efficiency at all, so it's always the full 3.
+static func calculate_stars(moves_made: int, move_limit: int) -> int:
+	if move_limit <= 0:
+		return 3
+
+	var ratio: float = float(moves_made) / float(move_limit)
+	if ratio <= 0.5:
+		return 3
+	if ratio <= 0.75:
+		return 2
+	return 1

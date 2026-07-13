@@ -70,6 +70,8 @@ func _load_and_start(level_id: int) -> void:
 				print("[GameScreen] %s" % error)
 		return
 
+	SaveManager.set_last_played_level(level_id)
+
 	var bus_queue: BusQueue = BusQueueScene.instantiate()
 	_bus_area.add_child(bus_queue)
 
