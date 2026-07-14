@@ -5,6 +5,24 @@ single GDScript codebase shared by Android and iOS.
 
 ## Status
 
+Milestone 15: cross-platform audit. Full Android/iOS review of the
+codebase (scattered `OS.get_name()` checks, duplicated platform logic,
+fixed-resolution UI, safe-area coverage, mouse/touch double-firing,
+non-`user://` save paths, filename case sensitivity, Android/iOS-only
+dependency leaks, platform code outside `PlatformService`, mobile memory/
+node churn) — one real bug found and fixed: `GameScreen`'s win/lose
+popups (and their buttons) were siblings of `%SafeArea` instead of
+descendants of it, so they ignored safe-area insets entirely. Reparented
+under `SafeArea`. Verified with a fresh Android debug build (installs,
+launches, boots to a running main loop, zero crashes, and the emulator's
+simulated notch confirms the safe-area margin is genuinely being applied)
+and a fresh iOS Simulator build (still succeeds; still can't be installed
+on this machine due to the same upstream Godot template defect from
+Milestone 14, re-confirmed unchanged). Confirmed the save format is
+byte-for-byte identical regardless of platform by diffing an actual
+on-device Android `save.json` against one from a macOS headless run.
+Full findings in [docs/CROSS_PLATFORM_AUDIT.md](docs/CROSS_PLATFORM_AUDIT.md).
+
 Milestone 14: iOS export infrastructure. `export_presets.cfg` gained an
 `iOS` preset (bundle id temporarily `com.furkandeniz.colorbus`, app name
 "Color Bus", `arm64` architecture) that generates a real Xcode project

@@ -1056,6 +1056,55 @@ over the bare library floor.
   profile listing the device's UDID, both interactive, Apple-account-tied
   steps that can't be scripted or committed).
 
+## Cross-platform audit (Milestone 15)
+
+A full-codebase audit against 11 specific Android/iOS risk categories
+(scattered `OS.get_name()`, duplicated per-platform logic, fixed-resolution
+UI, safe-area coverage, mouse/touch double-firing, non-`user://` save
+paths, filename case sensitivity, one-way platform dependency leaks,
+platform code outside `PlatformService`, mobile memory/node churn) — full
+results and methodology in
+[docs/CROSS_PLATFORM_AUDIT.md](CROSS_PLATFORM_AUDIT.md). The one real bug
+this found:
+
+- **`GameScreen`'s win/lose popups ignored the safe area entirely.**
+  `WinPopup`/`LosePopup` (and their 4 buttons) were children of the
+  `GameScreen` root, *siblings* of `%SafeArea` rather than descendants of
+  it, anchored to the full unsafe `0,0`-`1,1` screen rect —
+  `_apply_safe_area()` only ever touched `%SafeArea` itself, so the
+  popups never got the same margin treatment as the rest of the gameplay
+  UI. Fixed by reparenting both under `SafeArea` (a `MarginContainer`,
+  which applies its margined rect to every direct child automatically —
+  no code change needed beyond the scene reparent). Confirmed live on the
+  Android emulator: the boot log's `header_rect` starts at `y=128` on a
+  profile with a simulated display cutout, proving
+  `PlatformService.get_safe_area_margins()` returns a real non-zero inset
+  and that the fixed popups now sit within it like everything else.
+- **The reparent itself briefly broke `GameScreen` entirely** — see the
+  new CLAUDE.md gotcha ("`.tscn` `parent=` paths are scene-root-relative,
+  not name-relative"): every descendant of the moved nodes still had
+  stale unqualified `parent="WinPopup"`/`"LosePopup..."` paths that no
+  longer resolved, so `Center`/`Panel`/all 4 buttons silently failed to
+  attach, immediately null-crashing `GameScreen._ready()` on the very
+  next `controller.state_changed` the moment any level loaded.
+  `tools/validate.sh`'s `verify_game_controller.gd` step (which boots
+  `GameScreen` through the real app stack for all 20 levels) caught this
+  immediately — illustrating exactly why that step exists rather than
+  relying on a bare `.tscn` parse check.
+
+Every other checked category was already clean, a direct result of the
+platform-isolation discipline established since Milestone 2
+(`PlatformService`-only platform code, zero branching in game/UI classes,
+`user://`-only persistence, no manual input-event handling anywhere).
+Both a fresh Android debug build (installed, launched, zero crashes/ANRs)
+and a fresh iOS Simulator build (still succeeds, still blocked from
+*installing* by the same unchanged upstream template defect from
+Milestone 14) were re-verified as part of this audit. `SaveManager`'s
+save format was confirmed byte-identical across platforms by diffing an
+actual on-device Android `save.json` against a macOS-headless-produced
+one — same keys, same ordering, same types, since the code has zero
+platform branching to begin with.
+
 ## Testing
 
 - `tests/` holds a dependency-free GDScript test runner for pure-logic code

@@ -48,7 +48,7 @@ godot --headless --path . --script res://tests/verify_responsive_layout.gd
 Exit code 0 = all 5 resolutions passed, non-zero = at least one failed
 (see printed per-resolution `ok=` lines for which one).
 
-## Result log (last verified 2026-07-12, Godot 4.7.stable)
+## Result log (last verified 2026-07-14, Godot 4.7.stable — re-run as part of the Milestone 15 cross-platform audit)
 
 | Resolution | header | content | footer | Result |
 |---|---|---|---|---|

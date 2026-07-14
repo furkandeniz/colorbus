@@ -214,3 +214,23 @@ this — it needs an upstream Godot template fix, or a from-source
 Re-check `xcrun simctl list runtimes` behavior and this issue's status
 before assuming a future iOS Simulator build attempt is broken for some
 other reason.
+
+## `.tscn` `parent=` paths are scene-root-relative, not name-relative
+
+When hand-editing a `.tscn` file's `[node ... parent="X"]` lines to
+reparent a node (e.g. moving a popup under a different container), `X` is
+a path from the **scene root**, not from whatever node happens to share
+that name. Changing a node's own `parent=` line is not enough — every
+**descendant** of that node still has its old `parent="OldParentName"` (or
+`"OldParentName/Child/..."`) lines, and those must *all* gain the new
+full prefix too, or Godot silently fails to attach them where intended
+(`Node not found: "Center/Panel" (relative to ".../SafeArea/LosePopup")`
+— the child never actually became a child of the moved node at all,
+because its stale `parent="LosePopup"` no longer resolves from the
+root). Found while moving `WinPopup`/`LosePopup` under `SafeArea` in
+`scenes/game/game_screen.tscn` (Milestone 15 cross-platform audit) — every
+`parent="WinPopup..."` / `parent="LosePopup..."` line in the whole subtree
+needed the `SafeArea/` prefix added, not just the popup root's own line.
+`tools/validate.sh`'s `verify_game_controller.gd` step (which actually
+boots `GameScreen` through the real `AppRouter` stack) is what caught
+this — a bare parse check wouldn't have.
