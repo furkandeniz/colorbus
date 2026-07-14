@@ -234,3 +234,33 @@ needed the `SafeArea/` prefix added, not just the popup root's own line.
 `tools/validate.sh`'s `verify_game_controller.gd` step (which actually
 boots `GameScreen` through the real `AppRouter` stack) is what caught
 this — a bare parse check wouldn't have.
+
+## An interrupted animation coroutine needs validity checks at two different granularities
+
+`GameController._on_queue_passenger_selected()` and
+`_run_auto_board_cascade()` both `await` a `GameAnimator.fly_passenger_to()`
+flight before mutating game state. Two different ways of interrupting
+that flight require checking validity at two different levels, and
+checking only one is not enough:
+
+- **Whole-screen teardown** (e.g. the Android back button or menu
+  navigation, via `AppRouter._show_current()`'s `queue_free()` on the old
+  `GameScreen`) frees the *container* nodes themselves
+  (`_bus_queue`/`_waiting_area`) — check with a container-level
+  `_is_still_alive()` helper.
+- **Same-screen reconfiguration** (Restart calling
+  `BusQueue.configure()`/`PassengerQueue.configure()`) leaves the
+  container nodes alive but frees and replaces their *children* — the
+  specific `queue`/`active_bus` local objects a suspended coroutine still
+  holds references to. `_is_still_alive()` alone returns `true` here even
+  though those specific objects are gone, so this needs its own
+  `is_instance_valid(queue)` / `is_instance_valid(active_bus)` checks
+  immediately after every `await` point, not just once at the top of the
+  function.
+
+Found as two separate bugs, in that order, during the Milestone 16 MVP
+end-to-end test — fixing the first (screen-navigation) case looked
+complete until a second reproduction (Restart mid-flight) showed the
+container-level check alone wasn't sufficient. Any new code that awaits
+an animation and then touches a specific Node reference afterward needs
+both checks, not just one.

@@ -139,6 +139,16 @@ func _on_queue_passenger_selected(passenger: Passenger, queue: PassengerQueue) -
 		await _animator.fly_passenger_to(taken, active_bus, AnimationConfig.PASSENGER_TO_BUS)
 		if is_instance_valid(taken):
 			taken.queue_free()
+		# The player may have navigated away entirely while this passenger
+		# was still flying (e.g. the Android back button or a menu tap,
+		# freeing GameScreen and everything under it), or mashed Restart
+		# mid-flight (which reconfigures BusQueue/PassengerQueue in place,
+		# freeing this exact `queue`/`active_bus` instance even though the
+		# container nodes survive). Either way, this move's targets can
+		# already be freed by the time this await resolves -- never touch
+		# them past this point if so; there's nothing left to update.
+		if not is_instance_valid(queue) or not is_instance_valid(active_bus):
+			return
 		queue.finish_external_removal(color)
 
 		# board_passenger() can complete the bus synchronously, advancing
@@ -160,6 +170,8 @@ func _on_queue_passenger_selected(passenger: Passenger, queue: PassengerQueue) -
 		await _animator.fly_passenger_to(taken, slot_control, AnimationConfig.PASSENGER_TO_WAITING_SLOT)
 		if is_instance_valid(taken):
 			taken.queue_free()
+		if not is_instance_valid(queue):
+			return
 		queue.finish_external_removal(color)
 		if is_instance_valid(real_passenger):
 			real_passenger.modulate.a = 1.0
@@ -168,6 +180,8 @@ func _on_queue_passenger_selected(passenger: Passenger, queue: PassengerQueue) -
 	moves_made += 1
 
 	await _run_auto_board_cascade()
+	if not _is_still_alive():
+		return
 
 	if state != State.WON and state != State.LOST:
 		_set_state(State.PLAYING)
@@ -197,11 +211,26 @@ func _run_auto_board_cascade() -> void:
 		await _animator.fly_passenger_to(taken, active_bus, AnimationConfig.WAITING_TO_BUS)
 		if is_instance_valid(taken):
 			taken.queue_free()
+		# Same "screen gone or reconfigured mid-flight" concern as
+		# _on_queue_passenger_selected() -- active_bus is this specific,
+		# possibly now-stale instance, not just "whatever's active now".
+		if not _is_still_alive() or not is_instance_valid(active_bus):
+			return
 
 		active_bus.board_passenger(color)
 		_play_sfx("passenger_board_bus")
 
 		active_bus = _bus_queue.active_bus()
+
+
+## Whether the underlying view nodes are still alive -- false once
+## GameScreen (and everything under it) has been torn down mid-animation,
+## e.g. the player backed out to the menu while a passenger was still
+## flying. Every await point in this class checks this before touching
+## any view node afterward, so an interrupted animation never touches a
+## freed Node.
+func _is_still_alive() -> bool:
+	return is_instance_valid(_bus_queue) and is_instance_valid(_waiting_area)
 
 
 ## Fire-and-forget SFX trigger, silently no-op'ing (see AudioManager) until
@@ -221,6 +250,8 @@ func _play_sfx(key: String) -> void:
 
 
 func _check_game_over() -> void:
+	if not _is_still_alive():
+		return
 	if state == State.WON or state == State.LOST:
 		return
 	if GameRules.is_level_won(_bus_queue):

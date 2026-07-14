@@ -79,6 +79,70 @@ static func solve(level: LevelData) -> Dictionary:
 	}
 
 
+## Returns a winning move sequence (queue indices, in the order to tap
+## them) for `level`, or an empty array if unsolvable. Same BFS as
+## solve(), but tracks backpointers to reconstruct the actual path --
+## used by tests that need to actually *complete* a level (e.g. a full
+## playthrough of the hardest shipped level) without hand-deriving the
+## exact tap sequence by hand.
+static func find_winning_moves(level: LevelData) -> Array[int]:
+	var start_state: Dictionary = _initial_state(level)
+	if _is_won(start_state):
+		return []
+
+	var start_key: String = _state_key(start_state)
+	var came_from: Dictionary = {}
+	var visited: Dictionary = {start_key: true}
+	var frontier: Array = [start_state]
+	var frontier_keys: Array = [start_key]
+	var explored: int = 1
+
+	while not frontier.is_empty():
+		var next_frontier: Array = []
+		var next_keys: Array = []
+
+		for i: int in frontier.size():
+			var state: Dictionary = frontier[i]
+			var state_key: String = frontier_keys[i]
+			var queues: Array = state["queues"]
+			for queue_index: int in queues.size():
+				var next_state: Variant = _apply_move(state, queue_index, level.waiting_slot_count)
+				if next_state == null:
+					continue
+
+				explored += 1
+				if explored > MAX_EXPLORED_STATES:
+					return []
+
+				var key: String = _state_key(next_state)
+				if visited.has(key):
+					continue
+				visited[key] = true
+				came_from[key] = {"parent_key": state_key, "queue_index": queue_index}
+
+				if _is_won(next_state):
+					return _reconstruct_path(came_from, key)
+
+				next_frontier.append(next_state)
+				next_keys.append(key)
+
+		frontier = next_frontier
+		frontier_keys = next_keys
+
+	return []
+
+
+static func _reconstruct_path(came_from: Dictionary, final_key: String) -> Array[int]:
+	var moves: Array[int] = []
+	var key: String = final_key
+	while came_from.has(key):
+		var entry: Dictionary = came_from[key]
+		moves.append(int(entry["queue_index"]))
+		key = entry["parent_key"]
+	moves.reverse()
+	return moves
+
+
 static func _initial_state(level: LevelData) -> Dictionary:
 	var queues: Array = []
 	for queue_data: PassengerQueueData in level.passenger_queues:

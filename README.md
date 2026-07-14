@@ -5,6 +5,23 @@ single GDScript codebase shared by Android and iOS.
 
 ## Status
 
+Milestone 16: MVP end-to-end test. Full 23-scenario walkthrough with
+placeholder graphics — two real bugs found and fixed, both the same
+underlying failure class (a suspended animation coroutine resuming
+against a freed object, once via screen navigation and once via
+Restart's in-place `.configure()` teardown; see
+[docs/mvp-test-report.md](docs/mvp-test-report.md)). Built a real
+Settings UI (Music/Sound/Vibration toggles, previously a bare placeholder
+despite the backing `SaveManager` flags already working) and extended
+`LevelSolver` with a winning-move-sequence reconstruction so the hardest
+level (20) can be completed end-to-end by an automated test. New
+`tests/verify_mvp_end_to_end.gd` is `tools/validate.sh`'s step 17/17 (all
+17 steps pass). Fresh Android build re-verified clean on the emulator;
+fresh iOS Simulator build re-confirmed unchanged from Milestones 14/15
+(builds successfully, still blocked from installing by the same upstream
+Godot template defect). Full findings in
+[docs/mvp-test-report.md](docs/mvp-test-report.md).
+
 Milestone 15: cross-platform audit. Full Android/iOS review of the
 codebase (scattered `OS.get_name()` checks, duplicated platform logic,
 fixed-resolution UI, safe-area coverage, mouse/touch double-firing,
@@ -291,6 +308,15 @@ This runs, in order:
     solvable, reporting the true minimum move count for each
     (`tools/validation/run_level_solvability.gd`, wrapping
     `tools/validation/check_level_solvability.gd`)
+21. MVP end-to-end scenario checks -- Replay resets state, Restart and a
+    screen change mid-animation don't crash (regression tests for two
+    real Milestone 16 bugs), the Next Level button actually progresses to
+    a new level, the Settings screen's toggles reflect and persist real
+    `SaveManager` state, the win/lose popups are structurally inside the
+    safe-area container, two rapid taps across different queues only
+    process one move, and the hardest level (20) can be completed
+    end-to-end using a winning move sequence reconstructed by
+    `LevelSolver.find_winning_moves()` (`tests/verify_mvp_end_to_end.gd`)
 
 Exits 0 only if every step above passes except the informational unused-
 script report. See `tools/validation/` for the individual checks and

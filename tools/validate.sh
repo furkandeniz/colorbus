@@ -8,8 +8,9 @@
 # BusQueue scene check, a WaitingArea scene check, a level
 # loading/validation check, a GameController integration check, a
 # gameplay-animation infrastructure check, a SaveManager persistence check,
-# a LevelSelect check, and a level-solvability check (all 20 MVP levels).
-# Exits 0 only if every gating check passes.
+# a LevelSelect check, a level-solvability check (all 20 MVP levels), and
+# an MVP end-to-end scenario check. Exits 0 only if every gating check
+# passes.
 set -uo pipefail
 
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -62,7 +63,7 @@ echo "== Color Bus: Validate Project =="
 echo "Godot: $("$GODOT_BIN" --version)"
 echo
 
-echo "-- Step 1/16: headless import --"
+echo "-- Step 1/17: headless import --"
 IMPORT_LOG="$LOG_DIR/import.log"
 "$GODOT_BIN" --headless --path . --import >"$IMPORT_LOG" 2>&1
 import_status=$?
@@ -75,50 +76,53 @@ fi
 echo "Import: OK"
 echo
 
-echo "Step 2/16:"
+echo "Step 2/17:"
 run_step "script parse / JSON / resource-path / boot checks" "res://tools/validation/run_all.gd"
 
-echo "Step 3/16:"
+echo "Step 3/17:"
 run_step "responsive layout check (5 phone resolutions)" "res://tests/verify_responsive_layout.gd"
 
-echo "Step 4/16:"
+echo "Step 4/17:"
 run_step "app navigation check (MainMenu/LevelSelect/Settings/back)" "res://tests/verify_navigation.gd"
 
-echo "Step 5/16:"
+echo "Step 5/17:"
 run_step "typed data model checks" "res://tests/verify_data_models.gd"
 
-echo "Step 6/16:"
+echo "Step 6/17:"
 run_step "Passenger scene checks (5 colors, selectable/disabled/moving)" "res://tests/verify_passenger.gd"
 
-echo "Step 7/16:"
+echo "Step 7/17:"
 run_step "PassengerQueue checks (front-only selection, advance, queue_emptied)" "res://tests/verify_passenger_queue.gd"
 
-echo "Step 8/16:"
+echo "Step 8/17:"
 run_step "Bus checks (color match, capacity, completion)" "res://tests/verify_bus.gd"
 
-echo "Step 9/16:"
+echo "Step 9/17:"
 run_step "BusQueue checks (active bus advance, bus_queue_completed)" "res://tests/verify_bus_queue.gd"
 
-echo "Step 10/16:"
+echo "Step 10/17:"
 run_step "WaitingArea checks (first-empty-slot, full/empty, compaction, dynamic size)" "res://tests/verify_waiting_area.gd"
 
-echo "Step 11/16:"
+echo "Step 11/17:"
 run_step "Level loading/validation checks (LevelLoader/LevelValidator/LevelRepository, 20 MVP levels)" "res://tests/verify_level_loading.gd"
 
-echo "Step 12/16:"
+echo "Step 12/17:"
 run_step "GameController integration checks (full playthrough, auto-board, deadlock, all 20 levels playable via MainMenu)" "res://tests/verify_game_controller.gd"
 
-echo "Step 13/16:"
+echo "Step 13/17:"
 run_step "Gameplay animation checks (reduce-motion scaling, animation lock, timeout safety, flight landing, rejected feedback)" "res://tests/verify_game_animations.gd"
 
-echo "Step 14/16:"
+echo "Step 14/17:"
 run_step "SaveManager checks (first launch, save/reload, corrupt file, unlocking, star downgrade guard, settings persistence)" "res://tests/verify_save_manager.gd"
 
-echo "Step 15/16:"
+echo "Step 15/17:"
 run_step "LevelSelect checks (list/lock/stars, correct level id routing, win unlocks next, survives a simulated restart)" "res://tests/verify_level_select.gd"
 
-echo "Step 16/16:"
+echo "Step 16/17:"
 run_step "Level solvability checks (BFS solver over all 20 MVP levels, min-move count, bounded search)" "res://tools/validation/run_level_solvability.gd"
+
+echo "Step 17/17:"
+run_step "MVP end-to-end scenario checks (replay, restart/screen-change mid-animation, next level, settings toggles, safe area, rapid multi-tap, last-level completion)" "res://tests/verify_mvp_end_to_end.gd"
 
 echo "PASS: all checks passed"
 exit 0

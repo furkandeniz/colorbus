@@ -1,10 +1,13 @@
 [gd_scene format=3]
 
+[ext_resource type="Script" path="res://scripts/ui/settings_panel.gd" id="1_settings"]
+
 [node name="SettingsPanel" type="Control" unique_id=593822618]
 layout_mode = 3
 anchors_preset = 0
 anchor_right = 1.0
 anchor_bottom = 1.0
+script = ExtResource("1_settings")
 
 [node name="VBox" type="VBoxContainer" parent="." unique_id=601173927]
 layout_mode = 0
@@ -19,8 +22,50 @@ theme_override_font_sizes/font_size = 48
 text = "screen.settings.title"
 horizontal_alignment = 1
 
-[node name="BodyLabel" type="Label" parent="VBox" unique_id=2018995195]
+[node name="MusicRow" type="HBoxContainer" parent="VBox" unique_id=1001001001]
 layout_mode = 2
-text = "screen.settings.body"
-horizontal_alignment = 1
-autowrap_mode = 2
+size_flags_horizontal = 4
+theme_override_constants/separation = 24
+
+[node name="MusicLabel" type="Label" parent="VBox/MusicRow" unique_id=1001001002]
+layout_mode = 2
+custom_minimum_size = Vector2(400, 0)
+text = "settings.music"
+vertical_alignment = 1
+
+[node name="MusicToggle" type="CheckButton" parent="VBox/MusicRow" unique_id=1001001003]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(0, 80)
+
+[node name="SoundRow" type="HBoxContainer" parent="VBox" unique_id=1001002001]
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_constants/separation = 24
+
+[node name="SoundLabel" type="Label" parent="VBox/SoundRow" unique_id=1001002002]
+layout_mode = 2
+custom_minimum_size = Vector2(400, 0)
+text = "settings.sound"
+vertical_alignment = 1
+
+[node name="SoundToggle" type="CheckButton" parent="VBox/SoundRow" unique_id=1001002003]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(0, 80)
+
+[node name="VibrationRow" type="HBoxContainer" parent="VBox" unique_id=1001003001]
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_constants/separation = 24
+
+[node name="VibrationLabel" type="Label" parent="VBox/VibrationRow" unique_id=1001003002]
+layout_mode = 2
+custom_minimum_size = Vector2(400, 0)
+text = "settings.vibration"
+vertical_alignment = 1
+
+[node name="VibrationToggle" type="CheckButton" parent="VBox/VibrationRow" unique_id=1001003003]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(0, 80)

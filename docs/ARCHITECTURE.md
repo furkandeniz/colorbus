@@ -1105,6 +1105,47 @@ actual on-device Android `save.json` against a macOS-headless-produced
 one — same keys, same ordering, same types, since the code has zero
 platform branching to begin with.
 
+## MVP end-to-end test (Milestone 16)
+
+Full 23-scenario MVP walkthrough with placeholder graphics; complete
+results and methodology in
+[docs/mvp-test-report.md](mvp-test-report.md). Two real bugs found, both
+the same underlying failure class:
+
+- **Animation interrupted by screen navigation.** Tapping a passenger
+  starts an awaited `GameAnimator.fly_passenger_to()` flight; backing out
+  to the main menu mid-flight freed the `GameScreen` subtree
+  (`AppRouter._show_current()`'s `queue_free()`) while the suspended
+  `GameController._on_queue_passenger_selected()` coroutine was still
+  waiting on it, so it resumed against already-freed
+  `BusQueue`/`WaitingArea`/`PassengerQueue` objects and crashed with
+  `Nonexistent function ... in base 'previously freed'`.
+- **Animation interrupted by Restart** (found immediately after, while
+  confirming the first fix). Restart does **not** free the container
+  nodes — it calls `.configure()` on them, which frees and rebuilds their
+  *children* in place — so the first fix's container-level
+  `_is_still_alive()` check alone wasn't enough; the specific
+  `active_bus`/`queue` object instances a suspended coroutine still held
+  needed their own `is_instance_valid()` checks.
+
+Both fixed in `GameController` by checking validity at the right
+granularity (container *and* specific object) at every point a coroutine
+resumes after an `await`. General lesson recorded in CLAUDE.md's
+"Synchronous signal cascades..." section area — see that file for the
+full writeup.
+
+Also this milestone: `SettingsPanel` got a real UI (Music/Sound/Vibration
+`CheckButton` toggles backed by the already-functional `SaveManager`
+flags — scenarios 16/17 had no UI to exercise before this), and
+`LevelSolver` gained `find_winning_moves()` (BFS backpointer
+reconstruction) so an automated test can actually *complete* level 20
+without a hand-derived tap sequence. New test file
+`tests/verify_mvp_end_to_end.gd` (8 functions / 26 checks) is
+`tools/validate.sh`'s step 17/17. Fresh Android build re-verified clean
+(emulator install/launch/logcat); fresh iOS Simulator build re-confirmed
+unchanged from Milestones 14/15 (builds, can't install due to
+godotengine/godot#118161).
+
 ## Testing
 
 - `tests/` holds a dependency-free GDScript test runner for pure-logic code
